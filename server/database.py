@@ -40,6 +40,9 @@ async def get_db() -> AsyncSession:
 
 async def init_db() -> None:
     """Initialize database tables."""
+    # Import models to register them with SQLAlchemy
+    from server.models import Project, Policy, AuditLog  # noqa: F401
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
