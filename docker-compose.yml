@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # AI Firewall API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=${DEBUG:-false}
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/ai_firewall.db}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+    volumes:
+      # Persist SQLite database
+      - firewall-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: PostgreSQL for production
+  # Uncomment this section and update DATABASE_URL to use PostgreSQL
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER:-firewall}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-firewall}
+  #     POSTGRES_DB: ${POSTGRES_DB:-ai_firewall}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-firewall}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  firewall-data:
+  # postgres-data:
