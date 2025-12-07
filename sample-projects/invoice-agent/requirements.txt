@@ -1,0 +1,11 @@
+# AI Firewall SDK (install from parent project)
+# pip install -e ../../sdk/python
+
+# OpenAI for the AI agent
+openai>=1.0.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# For colorful terminal output
+rich>=13.0.0

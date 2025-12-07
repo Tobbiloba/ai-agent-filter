@@ -220,6 +220,32 @@ class PolicyEngine:
                     reason=f"Parameter '{param_path}' must equal '{constraint['equals']}'",
                 )
 
+        # Check 'not_pattern' constraint (block if matches - for PII detection)
+        if "not_pattern" in constraint:
+            pattern = constraint["not_pattern"]
+            if re.search(pattern, str(value)):
+                reason = constraint.get("reason", f"Pattern '{pattern}' is not allowed")
+                return ValidationResult(
+                    allowed=False,
+                    reason=f"Parameter '{param_path}': {reason}",
+                )
+
+        # Check 'contains' constraint (value must contain substring)
+        if "contains" in constraint:
+            if constraint["contains"] not in str(value):
+                return ValidationResult(
+                    allowed=False,
+                    reason=f"Parameter '{param_path}' must contain '{constraint['contains']}'",
+                )
+
+        # Check 'not_contains' constraint (value must not contain substring)
+        if "not_contains" in constraint:
+            if constraint["not_contains"] in str(value):
+                return ValidationResult(
+                    allowed=False,
+                    reason=f"Parameter '{param_path}' must not contain '{constraint['not_contains']}'",
+                )
+
         return ValidationResult(allowed=True)
 
     def _get_nested_value(self, path: str, params: dict[str, Any]) -> Any:
