@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from server.config import get_settings
 from server.database import init_db, close_db
+from server.routes import validate_router, policies_router, logs_router, projects_router
 
 settings = get_settings()
 
@@ -52,3 +53,10 @@ async def root():
         "docs": "/docs",
         "health": "/health",
     }
+
+
+# Include routers
+app.include_router(validate_router)
+app.include_router(policies_router)
+app.include_router(logs_router)
+app.include_router(projects_router)
