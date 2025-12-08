@@ -2,9 +2,54 @@
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
+
+
+# Regex timeout in seconds
+REGEX_TIMEOUT = 1.0
+
+# Thread pool for regex execution with timeout
+_regex_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="regex_worker")
+
+
+class RegexTimeoutError(Exception):
+    """Raised when regex matching times out."""
+    pass
+
+
+def safe_regex_match(pattern: str, value: str, timeout: float = REGEX_TIMEOUT) -> bool:
+    """
+    Safely execute regex match with timeout protection against ReDoS.
+    Returns True if pattern matches, False otherwise.
+    Raises RegexTimeoutError if matching takes too long.
+    """
+    def do_match():
+        return re.match(pattern, value) is not None
+
+    try:
+        future = _regex_executor.submit(do_match)
+        return future.result(timeout=timeout)
+    except FuturesTimeoutError:
+        raise RegexTimeoutError(f"Regex pattern matching timed out after {timeout}s")
+
+
+def safe_regex_search(pattern: str, value: str, timeout: float = REGEX_TIMEOUT) -> bool:
+    """
+    Safely execute regex search with timeout protection against ReDoS.
+    Returns True if pattern is found, False otherwise.
+    Raises RegexTimeoutError if matching takes too long.
+    """
+    def do_search():
+        return re.search(pattern, value) is not None
+
+    try:
+        future = _regex_executor.submit(do_search)
+        return future.result(timeout=timeout)
+    except FuturesTimeoutError:
+        raise RegexTimeoutError(f"Regex pattern matching timed out after {timeout}s")
 
 
 @dataclass
@@ -57,6 +102,12 @@ class PolicyEngine:
         except json.JSONDecodeError as e:
             return ValidationResult(
                 allowed=False, reason=f"Invalid policy JSON: {e}"
+            )
+
+        # Handle case where JSON is valid but not a dict (e.g., null, [], "string")
+        if not isinstance(policy, dict):
+            return ValidationResult(
+                allowed=False, reason="Policy must be a JSON object"
             )
 
         default_action = policy.get("default", "allow")
@@ -203,13 +254,19 @@ class PolicyEngine:
                     reason=f"Parameter '{param_path}' value '{value}' is blocked",
                 )
 
-        # Check 'pattern' constraint (regex)
+        # Check 'pattern' constraint (regex) - with ReDoS protection
         if "pattern" in constraint:
             pattern = constraint["pattern"]
-            if not re.match(pattern, str(value)):
+            try:
+                if not safe_regex_match(pattern, str(value)):
+                    return ValidationResult(
+                        allowed=False,
+                        reason=f"Parameter '{param_path}' value '{value}' does not match pattern '{pattern}'",
+                    )
+            except RegexTimeoutError:
                 return ValidationResult(
                     allowed=False,
-                    reason=f"Parameter '{param_path}' value '{value}' does not match pattern '{pattern}'",
+                    reason=f"Pattern matching timed out for '{param_path}' - possible ReDoS pattern",
                 )
 
         # Check 'equals' constraint
@@ -220,14 +277,20 @@ class PolicyEngine:
                     reason=f"Parameter '{param_path}' must equal '{constraint['equals']}'",
                 )
 
-        # Check 'not_pattern' constraint (block if matches - for PII detection)
+        # Check 'not_pattern' constraint (block if matches - for PII detection) - with ReDoS protection
         if "not_pattern" in constraint:
             pattern = constraint["not_pattern"]
-            if re.search(pattern, str(value)):
-                reason = constraint.get("reason", f"Pattern '{pattern}' is not allowed")
+            try:
+                if safe_regex_search(pattern, str(value)):
+                    reason = constraint.get("reason", f"Pattern '{pattern}' is not allowed")
+                    return ValidationResult(
+                        allowed=False,
+                        reason=f"Parameter '{param_path}': {reason}",
+                    )
+            except RegexTimeoutError:
                 return ValidationResult(
                     allowed=False,
-                    reason=f"Parameter '{param_path}': {reason}",
+                    reason=f"Pattern matching timed out for '{param_path}' - possible ReDoS pattern",
                 )
 
         # Check 'contains' constraint (value must contain substring)
