@@ -2,16 +2,45 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from server.config import get_settings
 
 settings = get_settings()
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=settings.debug,
-    future=True,
-)
+
+def _is_sqlite(url: str) -> bool:
+    """Check if database URL is SQLite."""
+    return url.startswith("sqlite")
+
+
+def create_engine_with_config():
+    """Create async engine with appropriate config for database type."""
+    is_sqlite = _is_sqlite(settings.database_url)
+
+    if is_sqlite:
+        # SQLite: No connection pooling, use NullPool for async compatibility
+        return create_async_engine(
+            settings.database_url,
+            echo=settings.db_echo or settings.debug,
+            future=True,
+            poolclass=NullPool,
+        )
+    else:
+        # PostgreSQL: Full connection pooling
+        return create_async_engine(
+            settings.database_url,
+            echo=settings.db_echo or settings.debug,
+            future=True,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            pool_timeout=settings.db_pool_timeout,
+            pool_recycle=settings.db_pool_recycle,
+            pool_pre_ping=True,  # Verify connections before use
+        )
+
+
+engine = create_engine_with_config()
 
 async_session_maker = async_sessionmaker(
     engine,
@@ -50,3 +79,12 @@ async def init_db() -> None:
 async def close_db() -> None:
     """Close database connections."""
     await engine.dispose()
+
+
+def get_database_type() -> str:
+    """Return the database type for health checks."""
+    if "postgresql" in settings.database_url:
+        return "postgresql"
+    elif "sqlite" in settings.database_url:
+        return "sqlite"
+    return "unknown"

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from server.config import get_settings
-from server.database import init_db, close_db
+from server.database import init_db, close_db, get_database_type
 from server.routes import validate_router, policies_router, logs_router, projects_router
 
 settings = get_settings()
@@ -41,7 +41,11 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "version": "0.1.0"}
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "database": get_database_type(),
+    }
 
 
 @app.get("/")

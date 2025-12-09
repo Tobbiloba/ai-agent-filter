@@ -12,11 +12,15 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - DEBUG=${DEBUG:-false}
-      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///./data/ai_firewall.db}
+      - DATABASE_URL=postgresql+asyncpg://firewall:firewall@db:5432/ai_firewall
+      - DB_POOL_SIZE=5
+      - DB_MAX_OVERFLOW=10
+      - DB_POOL_TIMEOUT=30
+      - DB_POOL_RECYCLE=1800
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
-    volumes:
-      # Persist SQLite database
-      - firewall-data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -25,24 +29,23 @@ services:
       retries: 3
       start_period: 10s
 
-  # Optional: PostgreSQL for production
-  # Uncomment this section and update DATABASE_URL to use PostgreSQL
-  # postgres:
-  #   image: postgres:15-alpine
-  #   environment:
-  #     POSTGRES_USER: ${POSTGRES_USER:-firewall}
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-firewall}
-  #     POSTGRES_DB: ${POSTGRES_DB:-ai_firewall}
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-firewall}"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: firewall
+      POSTGRES_PASSWORD: firewall
+      POSTGRES_DB: ai_firewall
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U firewall -d ai_firewall"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
-  firewall-data:
-  # postgres-data:
+  postgres_data:
