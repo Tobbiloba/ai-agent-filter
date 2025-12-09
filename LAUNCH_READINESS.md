@@ -108,16 +108,16 @@
 - [x] README.md exists
 - [x] API reference exists (`docs/api-reference.md`)
 - [x] Policy guide exists (`docs/policy-guide.md`)
-- [ ] **Quickstart guide** (step-by-step for new users)
-- [ ] **Troubleshooting guide** (common issues)
-- [ ] **Migration guide** (if they have existing agents)
-- [ ] **Best practices guide** (policy design patterns)
+- [x] **Quickstart guide** (`docs/quickstart.md`) - step-by-step for new users
+- [x] **Troubleshooting guide** (`docs/troubleshooting.md`) - common issues
+- [x] **Migration guide** (`docs/migration-guide.md`) - for existing agents
+- [x] **Best practices guide** (`docs/best-practices.md`) - policy design patterns
 
 #### Developer Experience
-- [ ] **SDK published to PyPI** (easy installation)
-- [ ] **Example projects polished** (invoice-agent, support-agent)
-- [ ] **Docker image published** (easy deployment)
-- [ ] **One-line setup script** (new user onboarding)
+- [x] **SDK published to PyPI** (`pip install ai-firewall`) - https://pypi.org/project/ai-firewall/
+- [x] **Example projects polished** (invoice-agent, support-agent)
+- [ ] **Docker image published** (easy deployment) - CI/CD workflow ready at `.github/workflows/publish-docker.yml`
+- [x] **One-line setup script** (`setup.sh`) - new user onboarding
 
 #### Operations
 - [ ] **Health check endpoint** ✅ (exists at `/health`)
@@ -381,4 +381,5 @@ tests/
 **You're in great shape!** The MVP is solid, well-tested with real examples, and documented. With ~1 week of focused work on testing and security hardening, you'll be ready for a strong public launch.
 
 **The key is: Ship early, iterate based on real user feedback. You'll learn more from actual users than from perfecting everything upfront.**
+
 
