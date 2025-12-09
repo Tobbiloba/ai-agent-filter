@@ -1,6 +1,7 @@
 """Validator service - orchestrates policy validation and logging."""
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -11,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.models import Policy, AuditLog
 from server.services.policy_engine import get_policy_engine, ValidationResult
+from server.services.aggregate import AggregateService
 from server.cache import get_cache
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,6 +52,7 @@ class ValidatorService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.engine = get_policy_engine()
+        self.aggregate_service = AggregateService(db)
 
     async def validate_action(
         self,
@@ -58,6 +63,10 @@ class ValidatorService:
     ) -> ActionValidationResult:
         """
         Validate an action against the project's active policy.
+
+        Validation order:
+        1. Basic policy rules (constraints, rate limits, agent lists)
+        2. Aggregate limits (cumulative limits across time windows)
 
         Returns the validation result and logs the attempt.
         """
@@ -81,6 +90,14 @@ class ValidatorService:
                 params=params,
             )
 
+            # If basic validation passed, check aggregate limits
+            if result.allowed:
+                aggregate_result = await self._check_aggregate_limits(
+                    policy_rules, project_id, agent_name, action_type, params
+                )
+                if not aggregate_result.allowed:
+                    result = aggregate_result
+
         execution_time_ms = int((time.perf_counter() - start_time) * 1000)
 
         # Create audit log entry
@@ -97,6 +114,13 @@ class ValidatorService:
         self.db.add(audit_log)
         await self.db.flush()  # Get the generated action_id
 
+        # Invalidate aggregate cache if action was allowed
+        # (next check will recalculate from DB including this action)
+        if result.allowed:
+            await self.aggregate_service.invalidate_cache(
+                project_id, agent_name, action_type
+            )
+
         return ActionValidationResult(
             allowed=result.allowed,
             action_id=audit_log.action_id,
@@ -104,6 +128,106 @@ class ValidatorService:
             timestamp=audit_log.timestamp,
             execution_time_ms=execution_time_ms,
         )
+
+    async def _check_aggregate_limits(
+        self,
+        policy_rules: str,
+        project_id: str,
+        agent_name: str,
+        action_type: str,
+        params: dict[str, Any],
+    ) -> ValidationResult:
+        """Check aggregate limits for matching rules.
+
+        Returns ValidationResult with allowed=False if any limit exceeded.
+        """
+        try:
+            policy = json.loads(policy_rules)
+        except json.JSONDecodeError:
+            return ValidationResult(allowed=True)  # Invalid JSON, skip aggregate check
+
+        rules = policy.get("rules", [])
+
+        for rule in rules:
+            rule_action = rule.get("action_type", "*")
+            # Check if rule matches this action
+            if rule_action != action_type and rule_action != "*":
+                continue
+
+            aggregate_limit = rule.get("aggregate_limit")
+            if not aggregate_limit:
+                continue
+
+            # Check this aggregate limit
+            result = await self._check_single_aggregate_limit(
+                aggregate_limit, project_id, agent_name, action_type, params
+            )
+            if not result.allowed:
+                return result
+
+        return ValidationResult(allowed=True)
+
+    async def _check_single_aggregate_limit(
+        self,
+        config: dict[str, Any],
+        project_id: str,
+        agent_name: str,
+        action_type: str,
+        params: dict[str, Any],
+    ) -> ValidationResult:
+        """Check a single aggregate limit configuration."""
+        max_value = config.get("max_value")
+        if max_value is None:
+            return ValidationResult(allowed=True)  # No limit set
+
+        param_path = config.get("param_path", "amount")
+        measure = config.get("measure", "sum")
+        window = config.get("window", "daily")
+
+        # Get current aggregate total
+        current_total = await self.aggregate_service.get_current_total(
+            project_id, agent_name, action_type, config
+        )
+
+        # Calculate projected total
+        if measure == "count":
+            # Count measure: just add 1 for this action
+            projected_total = current_total + 1
+        else:
+            # Sum measure: extract value from params
+            new_value = self._extract_param_value(params, param_path)
+            if new_value is None:
+                new_value = 0
+            projected_total = current_total + new_value
+
+        # Check if would exceed limit
+        if projected_total > max_value:
+            scope = config.get("scope", "agent")
+            return ValidationResult(
+                allowed=False,
+                reason=(
+                    f"Aggregate limit exceeded: {projected_total:.2f} > {max_value:.2f} "
+                    f"({window} window, {scope} scope)"
+                ),
+            )
+
+        return ValidationResult(allowed=True)
+
+    def _extract_param_value(self, params: dict[str, Any], path: str) -> float | None:
+        """Extract numeric value from params using dot notation path."""
+        try:
+            parts = path.split(".")
+            value = params
+            for part in parts:
+                if isinstance(value, dict):
+                    value = value.get(part)
+                else:
+                    return None
+            if value is None:
+                return None
+            return float(value)
+        except (ValueError, TypeError):
+            return None
 
     async def _get_active_policy(self, project_id: str) -> Policy | None:
         """Get the active policy for a project (with caching)."""

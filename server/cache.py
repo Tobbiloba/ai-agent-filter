@@ -131,6 +131,27 @@ class CacheService:
         """Invalidate project cache."""
         return await self.delete(f"api_key:{api_key}")
 
+    # === Aggregate Limit Cache Methods ===
+
+    async def get_aggregate(self, key: str) -> Optional[float]:
+        """Get cached aggregate total."""
+        data = await self.get(key)
+        if data:
+            try:
+                return float(data)
+            except ValueError:
+                logger.warning(f"Invalid float in aggregate cache: {key}")
+                return None
+        return None
+
+    async def set_aggregate(self, key: str, value: float, ttl: int) -> bool:
+        """Cache aggregate total."""
+        return await self.set(key, str(value), ttl)
+
+    async def invalidate_aggregates(self, project_id: str) -> int:
+        """Invalidate all aggregate caches for a project."""
+        return await self.delete_pattern(f"agg:{project_id}:*")
+
 
 # Global cache instance
 _cache: Optional[CacheService] = None

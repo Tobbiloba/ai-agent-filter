@@ -23,6 +23,9 @@ class PolicyRule(BaseModel):
     rate_limit: dict[str, int] | None = Field(
         None, description="Rate limit configuration"
     )
+    aggregate_limit: dict[str, Any] | None = Field(
+        None, description="Aggregate limit configuration for cumulative tracking"
+    )
 
 
 class PolicyCreate(BaseModel):
@@ -49,6 +52,13 @@ class PolicyCreate(BaseModel):
                         "constraints": {
                             "params.amount": {"max": 10000, "min": 0},
                             "params.currency": {"in": ["USD", "EUR"]},
+                        },
+                        "aggregate_limit": {
+                            "max_value": 50000,
+                            "window": "daily",
+                            "param_path": "amount",
+                            "measure": "sum",
+                            "scope": "agent",
                         },
                     },
                     {
