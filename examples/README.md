@@ -24,7 +24,33 @@ def pay_invoice(vendor: str, amount: float):
     process_payment(vendor, amount)
 ```
 
-### 2. OpenAI Agents Integration (`openai_agents_example.py`)
+### 2. LangChain Integration (`langchain/`)
+
+The most comprehensive integration with three patterns:
+
+- **Tool Wrapper**: `@protected_tool` decorator for individual tools
+- **Callback Handler**: Intercept all tool calls automatically
+- **Protected Executor**: Wrap entire AgentExecutor
+
+```python
+from ai_firewall import AIFirewall
+from examples.langchain.protected_agent import ProtectedAgentExecutor
+
+fw = AIFirewall(api_key="...", project_id="...")
+protected = ProtectedAgentExecutor(agent_executor, fw, "my_agent")
+
+# All tool calls are now validated
+result = protected.invoke({"input": "Pay invoice #123"})
+```
+
+Run the demo:
+```bash
+python examples/langchain/demo.py --mock
+```
+
+See [langchain/README.md](langchain/README.md) for full documentation.
+
+### 3. OpenAI Agents Integration (`openai_agents_example.py`)
 
 Shows how to validate OpenAI function calls before execution:
 
