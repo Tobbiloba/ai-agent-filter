@@ -1,0 +1,1120 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI Agent Safety Filter",
+    "description": "Middleware that intercepts AI agent actions, validates them against policy rules, and logs all activity.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Root endpoint with API info.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/validate_action": {
+      "post": {
+        "tags": [
+          "Validation"
+        ],
+        "summary": "Validate Action",
+        "description": "Validate an AI agent action against the project's policy.\n\nThis is the main endpoint for the firewall. Call this before executing\nany agent action to check if it's allowed.\n\nReturns:\n- **allowed**: True if the action can proceed, False if blocked\n- **action_id**: Unique identifier for this validation (for audit purposes)\n- **reason**: Explanation if the action was blocked",
+        "operationId": "validate_action_validate_action_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/policies/{project_id}": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Get Policy",
+        "description": "Get the active policy for a project.\n\nReturns the currently active policy rules that will be used\nfor action validation.",
+        "operationId": "get_policy_policies__project_id__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Create Or Update Policy",
+        "description": "Create or update a policy for a project.\n\nThis will deactivate any existing active policy and create\na new one with the provided rules.",
+        "operationId": "create_or_update_policy_policies__project_id__post",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/policies/{project_id}/history": {
+      "get": {
+        "tags": [
+          "Policies"
+        ],
+        "summary": "Get Policy History",
+        "description": "Get policy version history for a project.\n\nReturns all policies (active and inactive) in reverse chronological order.",
+        "operationId": "get_policy_history_policies__project_id__history_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PolicyResponse"
+                  },
+                  "title": "Response Get Policy History Policies  Project Id  History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/{project_id}": {
+      "get": {
+        "tags": [
+          "Audit Logs"
+        ],
+        "summary": "Get Logs",
+        "description": "Get audit logs for a project with pagination and filters.\n\nReturns all action validation attempts, both allowed and blocked.",
+        "operationId": "get_logs_logs__project_id__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "agent_name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by agent name",
+              "title": "Agent Name"
+            },
+            "description": "Filter by agent name"
+          },
+          {
+            "name": "action_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by action type",
+              "title": "Action Type"
+            },
+            "description": "Filter by action type"
+          },
+          {
+            "name": "allowed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by allowed status",
+              "title": "Allowed"
+            },
+            "description": "Filter by allowed status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logs/{project_id}/stats": {
+      "get": {
+        "tags": [
+          "Audit Logs"
+        ],
+        "summary": "Get Log Stats",
+        "description": "Get summary statistics for audit logs.\n\nReturns counts of allowed vs blocked actions, most common action types, etc.",
+        "operationId": "get_log_stats_logs__project_id__stats_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Create Project",
+        "description": "Create a new project.\n\nReturns the project details including the generated API key.\n**Important**: Store the API key securely - it cannot be retrieved again.",
+        "operationId": "create_project_projects_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project_id}": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Get Project",
+        "description": "Get project details (without full API key).\n\nUse this to verify a project exists and check its status.",
+        "operationId": "get_project_projects__project_id__get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Deactivate Project",
+        "description": "Deactivate a project.\n\nThis will prevent any further API calls for this project.\nThe project and its data are retained for audit purposes.",
+        "operationId": "deactivate_project_projects__project_id__delete",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionRequest": {
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "Project identifier"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name",
+            "description": "Name of the agent performing the action"
+          },
+          "action_type": {
+            "type": "string",
+            "title": "Action Type",
+            "description": "Type of action being performed"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "Parameters for the action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "agent_name",
+          "action_type"
+        ],
+        "title": "ActionRequest",
+        "description": "Request schema for validating an action.",
+        "example": {
+          "action_type": "pay_invoice",
+          "agent_name": "invoice_agent",
+          "params": {
+            "amount": 5000,
+            "currency": "USD",
+            "vendor": "VendorA"
+          },
+          "project_id": "finbot-123"
+        }
+      },
+      "ActionResponse": {
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed",
+            "description": "Whether the action is allowed"
+          },
+          "action_id": {
+            "type": "string",
+            "title": "Action Id",
+            "description": "Unique identifier for this action"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "When the validation occurred"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Reason for blocking (only present if blocked)"
+          },
+          "execution_time_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Time Ms",
+            "description": "Time taken to validate in milliseconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "allowed",
+          "action_id",
+          "timestamp"
+        ],
+        "title": "ActionResponse",
+        "description": "Response schema for action validation.",
+        "examples": [
+          {
+            "action_id": "act_abc123def456",
+            "allowed": true,
+            "execution_time_ms": 5,
+            "timestamp": "2025-12-07T10:30:00Z"
+          },
+          {
+            "action_id": "act_xyz789uvw012",
+            "allowed": false,
+            "execution_time_ms": 3,
+            "reason": "Amount 15000 exceeds maximum allowed 10000",
+            "timestamp": "2025-12-07T10:30:00Z"
+          }
+        ]
+      },
+      "AuditLogList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditLogResponse"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of log entries"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of entries"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page",
+            "description": "Current page number"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size",
+            "description": "Number of items per page"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "description": "Whether there are more pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "has_more"
+        ],
+        "title": "AuditLogList",
+        "description": "Paginated list of audit logs."
+      },
+      "AuditLogResponse": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "title": "Action Id",
+            "description": "Unique action identifier"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "Project identifier"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name",
+            "description": "Agent that performed the action"
+          },
+          "action_type": {
+            "type": "string",
+            "title": "Action Type",
+            "description": "Type of action"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params",
+            "description": "Action parameters"
+          },
+          "allowed": {
+            "type": "boolean",
+            "title": "Allowed",
+            "description": "Whether action was allowed"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Reason for blocking"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version",
+            "description": "Policy version used"
+          },
+          "execution_time_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Time Ms",
+            "description": "Validation time in ms"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "When the action occurred"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action_id",
+          "project_id",
+          "agent_name",
+          "action_type",
+          "params",
+          "allowed",
+          "timestamp"
+        ],
+        "title": "AuditLogResponse",
+        "description": "Response schema for an audit log entry."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "PolicyCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Policy name",
+            "default": "default"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Policy version",
+            "default": "1.0"
+          },
+          "default": {
+            "type": "string",
+            "title": "Default",
+            "description": "Default behavior (allow or block)",
+            "default": "allow"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyRule"
+            },
+            "type": "array",
+            "title": "Rules",
+            "description": "List of policy rules"
+          }
+        },
+        "type": "object",
+        "title": "PolicyCreate",
+        "description": "Schema for creating/updating a policy.",
+        "example": {
+          "default": "allow",
+          "name": "invoice-policy",
+          "rules": [
+            {
+              "action_type": "pay_invoice",
+              "constraints": {
+                "params.amount": {
+                  "max": 10000,
+                  "min": 0
+                },
+                "params.currency": {
+                  "in": [
+                    "USD",
+                    "EUR"
+                  ]
+                }
+              }
+            },
+            {
+              "action_type": "*",
+              "rate_limit": {
+                "max_requests": 100,
+                "window_seconds": 3600
+              }
+            }
+          ],
+          "version": "1.0"
+        }
+      },
+      "PolicyResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Policy ID"
+          },
+          "project_id": {
+            "type": "string",
+            "title": "Project Id",
+            "description": "Project this policy belongs to"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Policy name"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Policy version"
+          },
+          "rules": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Rules",
+            "description": "Policy rules as JSON"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "Whether this policy is active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the policy was created"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "When the policy was last updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "version",
+          "rules",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PolicyResponse",
+        "description": "Response schema for a policy."
+      },
+      "PolicyRule": {
+        "properties": {
+          "action_type": {
+            "type": "string",
+            "title": "Action Type",
+            "description": "Action type this rule applies to (* for all)",
+            "default": "*"
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constraints",
+            "description": "Parameter constraints"
+          },
+          "allowed_agents": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Agents",
+            "description": "Whitelist of allowed agents"
+          },
+          "blocked_agents": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocked Agents",
+            "description": "Blacklist of blocked agents"
+          },
+          "rate_limit": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit",
+            "description": "Rate limit configuration"
+          }
+        },
+        "type": "object",
+        "title": "PolicyRule",
+        "description": "A single policy rule."
+      },
+      "ProjectCreate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Unique project identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Project display name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ProjectCreate",
+        "description": "Schema for creating a project.",
+        "example": {
+          "id": "finbot-123",
+          "name": "Finance Bot Production"
+        }
+      },
+      "ProjectResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Project identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Project name"
+          },
+          "api_key": {
+            "type": "string",
+            "title": "Api Key",
+            "description": "API key for authentication"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "Whether the project is active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the project was created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "api_key",
+          "is_active",
+          "created_at"
+        ],
+        "title": "ProjectResponse",
+        "description": "Response schema for a project.",
+        "example": {
+          "api_key": "af_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789",
+          "created_at": "2025-12-07T10:00:00Z",
+          "id": "finbot-123",
+          "is_active": true,
+          "name": "Finance Bot Production"
+        }
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  }
+}
