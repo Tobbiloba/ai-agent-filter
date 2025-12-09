@@ -109,16 +109,23 @@ class TestHealthEndpointDatabaseType:
             assert "database" in data
             assert data["database"] in ["sqlite", "postgresql", "unknown"]
 
-    def test_health_returns_sqlite_by_default(self):
-        """Health endpoint should return 'sqlite' with default config."""
+    def test_health_returns_expected_database_type(self):
+        """Health endpoint should return correct database type based on config."""
+        import os
         from fastapi.testclient import TestClient
         from server.app import app
 
         with TestClient(app) as client:
             response = client.get("/health")
             data = response.json()
-            # Default is SQLite
-            assert data["database"] == "sqlite"
+
+            # Check based on DATABASE_URL environment variable
+            db_url = os.getenv("DATABASE_URL", "")
+            if "postgresql" in db_url:
+                assert data["database"] == "postgresql"
+            else:
+                # Default is SQLite
+                assert data["database"] == "sqlite"
 
 
 class TestEngineConfiguration:

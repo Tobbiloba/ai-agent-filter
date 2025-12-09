@@ -19,16 +19,18 @@ Example:
 import os
 import asyncio
 import pytest
-from typing import Generator
+import pytest_asyncio
 
 # Skip all tests if PostgreSQL URL not provided
-pytestmark = pytest.mark.skipif(
-    not os.getenv("TEST_POSTGRES_URL"),
-    reason="TEST_POSTGRES_URL not set - skipping PostgreSQL tests"
-)
+pytestmark = [
+    pytest.mark.skipif(
+        not os.getenv("TEST_POSTGRES_URL"),
+        reason="TEST_POSTGRES_URL not set - skipping PostgreSQL tests"
+    ),
+]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def postgres_url() -> str:
     """Get PostgreSQL URL from environment."""
     url = os.getenv("TEST_POSTGRES_URL")
@@ -37,8 +39,8 @@ def postgres_url() -> str:
     return url
 
 
-@pytest.fixture(scope="module")
-def postgres_engine(postgres_url):
+@pytest_asyncio.fixture(scope="function")
+async def postgres_engine(postgres_url):
     """Create PostgreSQL engine for testing."""
     from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -52,26 +54,22 @@ def postgres_engine(postgres_url):
     yield engine
 
     # Cleanup
-    asyncio.get_event_loop().run_until_complete(engine.dispose())
+    await engine.dispose()
 
 
-@pytest.fixture(scope="module")
-def postgres_tables(postgres_engine):
+@pytest_asyncio.fixture(scope="function")
+async def postgres_tables(postgres_engine):
     """Create tables in PostgreSQL."""
     from server.database import Base
     from server.models import Project, Policy, AuditLog  # noqa: F401
 
-    async def setup():
-        async with postgres_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    async with postgres_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    async def teardown():
-        async with postgres_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
-
-    asyncio.get_event_loop().run_until_complete(setup())
     yield
-    asyncio.get_event_loop().run_until_complete(teardown())
+
+    async with postgres_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
 class TestPostgreSQLConnection:
@@ -271,14 +269,15 @@ class TestPostgreSQLConstraints:
             postgres_engine, class_=AsyncSession, expire_on_commit=False
         )
 
+        # First, create project1 and commit it
         async with async_session() as session:
-            # Create first project
             project1 = Project(id="unique-test-1", name="Unique Test 1")
             session.add(project1)
-            await session.flush()
+            await session.commit()
             api_key = project1.api_key
 
-            # Try to create second project with same API key
+        # Try to create second project with same API key in a new session
+        async with async_session() as session:
             project2 = Project(id="unique-test-2", name="Unique Test 2")
             project2.api_key = api_key  # Force same API key
             session.add(project2)
@@ -286,11 +285,12 @@ class TestPostgreSQLConstraints:
             with pytest.raises(IntegrityError):
                 await session.commit()
 
-            await session.rollback()
-
-            # Cleanup
-            await session.delete(project1)
-            await session.commit()
+        # Cleanup in a new session
+        async with async_session() as session:
+            project1 = await session.get(Project, "unique-test-1")
+            if project1:
+                await session.delete(project1)
+                await session.commit()
 
 
 class TestPostgreSQLConcurrency:
@@ -340,7 +340,8 @@ class TestPostgreSQLConcurrency:
 
         async def run_query(i: int):
             async with async_session() as session:
-                result = await session.execute(text("SELECT pg_sleep(0.01), :i"), {"i": i})
+                # Simple query to test connection pool under load
+                result = await session.execute(text("SELECT pg_sleep(0.01), 1"))
                 return i
 
         # Run 50 concurrent queries
