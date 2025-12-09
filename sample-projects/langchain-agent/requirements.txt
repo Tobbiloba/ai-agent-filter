@@ -1,0 +1,14 @@
+# LangChain Agent Sample Project
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-openai>=0.0.5
+openai>=1.0.0
+
+# AI Firewall SDK
+ai-firewall
+
+# For async support
+httpx
+
+# Environment variables
+python-dotenv

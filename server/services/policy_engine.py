@@ -161,7 +161,7 @@ class PolicyEngine:
 
         # Check blocked_agents
         blocked_agents = rule.get("blocked_agents", [])
-        if agent_name in blocked_agents:
+        if agent_name in blocked_agents or "*" in blocked_agents:
             return ValidationResult(
                 allowed=False,
                 reason=f"Agent '{agent_name}' is blocked",
