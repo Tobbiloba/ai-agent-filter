@@ -36,7 +36,7 @@
 
 | # | Feature | Priority | Complexity | Description |
 |---|---------|----------|------------|-------------|
-| 1.1 | PostgreSQL Support | Critical | Easy | Replace SQLite with PostgreSQL. Add connection pooling via `asyncpg`. |
+| 1.1 | PostgreSQL Support | Critical | Easy | Replace SQLite with PostgreSQL. Add connection pooling via `asyncpg`. -- done|
 | 1.2 | Redis Caching | Critical | Easy | Cache policy lookups. Sub-millisecond validation at scale. |
 | 1.3 | Aggregate Limits | Critical | Medium | Cross-action limits: "max $50K total per day" with rolling windows. Key differentiator. |
 | 1.4 | Fail-Closed Mode | Critical | Easy | Config: if service unreachable, block all actions (not fail-open). |

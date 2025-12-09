@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.models import Policy, AuditLog
 from server.services.policy_engine import get_policy_engine, ValidationResult
+from server.cache import get_cache
 
 
 @dataclass
@@ -105,7 +106,15 @@ class ValidatorService:
         )
 
     async def _get_active_policy(self, project_id: str) -> Policy | None:
-        """Get the active policy for a project."""
+        """Get the active policy for a project (with caching)."""
+        cache = get_cache()
+
+        # Try cache first
+        cached = await cache.get_policy(project_id)
+        if cached:
+            return self._policy_from_cache(cached)
+
+        # Cache miss - fetch from database
         stmt = (
             select(Policy)
             .where(Policy.project_id == project_id)
@@ -114,7 +123,32 @@ class ValidatorService:
             .limit(1)
         )
         result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        policy = result.scalar_one_or_none()
+
+        # Cache the result
+        if policy:
+            await cache.set_policy(project_id, {
+                "id": policy.id,
+                "project_id": policy.project_id,
+                "name": policy.name,
+                "version": policy.version,
+                "rules": policy.rules,
+                "is_active": policy.is_active,
+            })
+
+        return policy
+
+    def _policy_from_cache(self, data: dict) -> Policy:
+        """Reconstruct Policy object from cached data."""
+        policy = Policy(
+            id=data["id"],
+            project_id=data["project_id"],
+            name=data["name"],
+            version=data["version"],
+            rules=data["rules"],
+            is_active=data["is_active"],
+        )
+        return policy
 
 
 async def get_validator(db: AsyncSession) -> ValidatorService:

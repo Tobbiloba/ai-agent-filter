@@ -9,6 +9,7 @@ from server.database import get_db
 from server.middleware.auth import verify_project_access
 from server.models import Policy, Project
 from server.schemas import PolicyCreate, PolicyResponse
+from server.cache import get_cache
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 
@@ -94,6 +95,10 @@ async def create_or_update_policy(
     )
     db.add(policy)
     await db.flush()
+
+    # Invalidate cache for this project's policy
+    cache = get_cache()
+    await cache.invalidate_policy(project_id)
 
     return PolicyResponse(
         id=policy.id,

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from server.config import get_settings
 from server.database import init_db, close_db, get_database_type
+from server.cache import init_cache, close_cache, get_cache
 from server.routes import validate_router, policies_router, logs_router, projects_router
 
 settings = get_settings()
@@ -16,8 +17,10 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
     # Startup
     await init_db()
+    await init_cache()
     yield
     # Shutdown
+    await close_cache()
     await close_db()
 
 
@@ -41,10 +44,12 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    cache = get_cache()
     return {
         "status": "healthy",
         "version": "0.1.0",
         "database": get_database_type(),
+        "cache": "redis" if cache.is_available else "disabled",
     }
 
 

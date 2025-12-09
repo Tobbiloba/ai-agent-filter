@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 100
     rate_limit_window: int = 3600  # seconds
 
+    # Redis Configuration (Optional - leave empty to disable)
+    redis_url: str = ""  # e.g., "redis://localhost:6379/0"
+    redis_pool_size: int = 10
+    redis_timeout: float = 1.0  # seconds
+    cache_ttl_policy: int = 300  # 5 minutes
+    cache_ttl_project: int = 600  # 10 minutes
+    cache_enabled: bool = True  # Master switch for caching
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

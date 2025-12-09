@@ -18,8 +18,13 @@ services:
       - DB_POOL_TIMEOUT=30
       - DB_POOL_RECYCLE=1800
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - REDIS_URL=redis://redis:6379/0
+      - CACHE_TTL_POLICY=300
+      - CACHE_TTL_PROJECT=600
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -47,5 +52,21 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  redis_data:
