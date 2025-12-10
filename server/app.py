@@ -1,5 +1,6 @@
 """Main FastAPI application."""
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -22,9 +23,20 @@ from server.metrics import (
     HTTP_REQUESTS_IN_PROGRESS,
     normalize_endpoint,
 )
+from server.shutdown import is_shutting_down, set_shutting_down
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+def get_in_flight_count() -> int:
+    """Get total number of in-flight requests from Prometheus metric."""
+    total = 0
+    for metric in HTTP_REQUESTS_IN_PROGRESS.collect():
+        for sample in metric.samples:
+            if sample.name == "http_requests_in_progress":
+                total += int(sample.value)
+    return total
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
@@ -83,7 +95,25 @@ async def lifespan(app: FastAPI):
     await init_db()
     await init_cache()
     yield
-    # Shutdown
+
+    # Shutdown - graceful drain
+    set_shutting_down()
+
+    # Wait for in-flight requests to complete
+    timeout = settings.shutdown_timeout
+    start = asyncio.get_event_loop().time()
+
+    while get_in_flight_count() > 0:
+        elapsed = asyncio.get_event_loop().time() - start
+        if elapsed >= timeout:
+            remaining = get_in_flight_count()
+            logger.warning(
+                f"Shutdown timeout reached with {remaining} requests still in-flight"
+            )
+            break
+        await asyncio.sleep(0.1)
+
+    logger.info("All requests drained, closing connections")
     await close_cache()
     await close_db()
 
@@ -113,7 +143,11 @@ app.add_middleware(MetricsMiddleware)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint (liveness probe).
+
+    Always returns 200 if the server is running, even during shutdown.
+    Use /ready for readiness checks.
+    """
     cache = get_cache()
     return {
         "status": "healthy",
@@ -121,6 +155,22 @@ async def health_check():
         "database": get_database_type(),
         "cache": "redis" if cache.is_available else "disabled",
     }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness probe for Kubernetes.
+
+    Returns 503 during shutdown to stop receiving new traffic.
+    Use this endpoint for load balancer health checks.
+    """
+    if is_shutting_down():
+        return Response(
+            content='{"status": "shutting_down"}',
+            status_code=503,
+            media_type="application/json",
+        )
+    return {"status": "ready"}
 
 
 @app.get("/metrics")

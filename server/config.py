@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     fail_closed: bool = False  # If True, block actions when service errors occur
     fail_closed_reason: str = "Service unavailable - fail-closed mode active"
 
+    # Graceful Shutdown
+    shutdown_timeout: int = 30  # Seconds to wait for in-flight requests to drain
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -42,7 +42,7 @@
 | 1.4 | Fail-Closed Mode | Critical | Easy | Config: if service unreachable, block all actions (not fail-open). ✓ Done |
 | 1.5 | `/metrics` Endpoint | High | Easy | Prometheus metrics: requests/sec, latency p50/p95/p99, error rates. ✓ Done |
 | 1.6 | Structured Logging | High | Easy | JSON logs with correlation IDs. Compatible with log aggregators. ✓ Done |
-| 1.7 | Graceful Shutdown | Medium | Easy | Drain connections on SIGTERM. Kubernetes-ready. |
+| 1.7 | Graceful Shutdown | Medium | Easy | Drain connections on SIGTERM. Kubernetes-ready. ✓ Done |
 
 **Week 1 Definition of Done:**
 - [x] PostgreSQL works in production
@@ -222,11 +222,13 @@
 ```
 Week 1 Tasks:
 [x] LangChain integration complete
-[ ] PostgreSQL support
-[ ] Redis caching
-[ ] Aggregate limits (daily totals)
-[ ] Fail-closed mode
-[ ] /metrics endpoint
+[x] PostgreSQL support
+[x] Redis caching
+[x] Aggregate limits (daily totals)
+[x] Fail-closed mode
+[x] /metrics endpoint
+[x] Structured logging
+[x] Graceful shutdown
 ```
 
 ---
