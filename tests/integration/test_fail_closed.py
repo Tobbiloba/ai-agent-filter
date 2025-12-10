@@ -302,7 +302,10 @@ class TestFailClosedSecurityEdgeCases:
 
             # Should be 403, not a 200 with allowed=false
             assert response.status_code == 403
-            assert "project" in response.json()["detail"].lower()
+            # New error format uses {"error": {...}} structure
+            error_data = response.json()
+            assert "error" in error_data
+            assert "project" in error_data["error"]["message"].lower()
 
     def test_invalid_api_key_returns_403_not_fail_closed(self, client):
         """Invalid API key should return 403, not a fail-closed response."""

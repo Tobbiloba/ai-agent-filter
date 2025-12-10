@@ -1,0 +1,54 @@
+{
+  "name": "ai-firewall",
+  "version": "0.1.0",
+  "description": "Node.js SDK for AI Agent Safety Filter - validate AI agent actions against policies",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "security",
+    "firewall",
+    "safety",
+    "llm",
+    "guardrails",
+    "validation",
+    "policy"
+  ],
+  "author": "AI Firewall Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/ai-firewall"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/ai-firewall/issues"
+  },
+  "homepage": "https://github.com/yourusername/ai-firewall#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

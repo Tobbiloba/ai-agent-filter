@@ -12,6 +12,7 @@ from server.models import Policy, Project
 from server.schemas import PolicyCreate, PolicyResponse
 from server.cache import get_cache
 from server.templates.loader import get_template
+from server.errors import ErrorCode, make_error
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 
@@ -41,7 +42,7 @@ async def get_policy(
     if not policy:
         raise HTTPException(
             status_code=404,
-            detail=f"No active policy found for project '{project_id}'",
+            detail=make_error(ErrorCode.POLICY_NOT_FOUND),
         )
 
     return PolicyResponse(
@@ -170,7 +171,7 @@ async def create_policy_from_template(
     if not template:
         raise HTTPException(
             status_code=404,
-            detail=f"Template '{template_id}' not found. Available templates: finance, healthcare, general",
+            detail=make_error(ErrorCode.TEMPLATE_NOT_FOUND),
         )
 
     # Use custom name or template name

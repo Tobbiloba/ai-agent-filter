@@ -9,6 +9,7 @@ from server.config import get_settings
 from server.database import get_db
 from server.models import Project
 from server.cache import get_cache
+from server.errors import ErrorCode, make_error
 
 settings = get_settings()
 
@@ -22,6 +23,8 @@ def _project_from_cache(data: dict) -> Project:
         name=data["name"],
         api_key=data["api_key"],
         is_active=data["is_active"],
+        webhook_url=data.get("webhook_url"),
+        webhook_enabled=data.get("webhook_enabled", False),
     )
     return project
 
@@ -34,7 +37,7 @@ async def get_project_by_api_key(
     if not api_key:
         raise HTTPException(
             status_code=401,
-            detail="Missing API key. Include it in the X-API-Key header.",
+            detail=make_error(ErrorCode.MISSING_API_KEY),
         )
 
     cache = get_cache()
@@ -52,7 +55,7 @@ async def get_project_by_api_key(
     if not project:
         raise HTTPException(
             status_code=403,
-            detail="Invalid API key or project is inactive.",
+            detail=make_error(ErrorCode.INVALID_API_KEY),
         )
 
     # Cache the result
@@ -61,6 +64,8 @@ async def get_project_by_api_key(
         "name": project.name,
         "api_key": project.api_key,
         "is_active": project.is_active,
+        "webhook_url": project.webhook_url,
+        "webhook_enabled": project.webhook_enabled,
     })
 
     return project
@@ -74,6 +79,6 @@ async def verify_project_access(
     if project.id != project_id:
         raise HTTPException(
             status_code=403,
-            detail="API key does not have access to this project.",
+            detail=make_error(ErrorCode.PROJECT_MISMATCH),
         )
     return project

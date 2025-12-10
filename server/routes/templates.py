@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from server.templates.loader import list_templates, get_template
+from server.errors import ErrorCode, make_error
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
 
@@ -28,6 +29,6 @@ async def get_template_detail(template_id: str):
     if not template:
         raise HTTPException(
             status_code=404,
-            detail=f"Template '{template_id}' not found. Available templates: finance, healthcare, general",
+            detail=make_error(ErrorCode.TEMPLATE_NOT_FOUND),
         )
     return template

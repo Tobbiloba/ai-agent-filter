@@ -5,8 +5,10 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -200,6 +202,58 @@ async def root():
         "docs": "/docs",
         "health": "/health",
     }
+
+
+# Custom exception handlers for better error messages
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Custom HTTP exception handler that preserves structured error responses.
+
+    If detail is already a dict (our structured format), return it as-is.
+    Otherwise, wrap the message in our standard error format.
+    """
+    if isinstance(exc.detail, dict):
+        # Already in our structured format
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.detail,
+        )
+    # Wrap simple string messages
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"message": exc.detail}},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Custom validation error handler with actionable hints.
+
+    Transforms Pydantic validation errors into our standard format
+    with field paths and helpful hints.
+    """
+    errors = []
+    for error in exc.errors():
+        # Build field path (e.g., "body.project_id" or "query.page")
+        field_parts = [str(loc) for loc in error["loc"]]
+        field = ".".join(field_parts)
+
+        # Get the actual field name (last part) for hint
+        field_name = field_parts[-1] if field_parts else "unknown"
+
+        errors.append({
+            "code": "invalid_field",
+            "message": error["msg"],
+            "field": field,
+            "hint": f"Check the '{field_name}' field in your request.",
+        })
+
+    return JSONResponse(
+        status_code=422,
+        content={"errors": errors},
+    )
 
 
 # Include routers

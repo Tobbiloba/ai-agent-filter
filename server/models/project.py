@@ -24,6 +24,8 @@ class Project(Base):
         String(64), unique=True, nullable=False, default=generate_api_key
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    webhook_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    webhook_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

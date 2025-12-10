@@ -4,7 +4,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.config import get_settings
@@ -14,6 +14,7 @@ from server.middleware.auth import get_project_by_api_key
 from server.models import Project
 from server.schemas import ActionRequest, ActionResponse
 from server.services import ValidatorService
+from server.services.webhook import get_webhook_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Validation"])
@@ -22,6 +23,7 @@ router = APIRouter(tags=["Validation"])
 @router.post("/validate_action", response_model=ActionResponse)
 async def validate_action(
     request: ActionRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     project: Project = Depends(get_project_by_api_key),
 ):
@@ -75,6 +77,20 @@ async def validate_action(
         allowed=result.allowed,
         duration_ms=result.execution_time_ms or 0,
     )
+
+    # Send webhook if action blocked and webhook configured
+    if not result.allowed and project.webhook_enabled and project.webhook_url:
+        webhook_service = get_webhook_service()
+        background_tasks.add_task(
+            webhook_service.send_blocked_action_webhook,
+            webhook_url=project.webhook_url,
+            action_id=result.action_id,
+            project_id=request.project_id,
+            agent_name=request.agent_name,
+            action_type=request.action_type,
+            params=request.params,
+            reason=result.reason or "Action blocked by policy",
+        )
 
     return ActionResponse(
         allowed=result.allowed,

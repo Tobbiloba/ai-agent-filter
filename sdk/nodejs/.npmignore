@@ -1,0 +1,23 @@
+# Source files
+src/
+tests/
+tsconfig.json
+
+# Development files
+.git
+.gitignore
+.eslintrc*
+.prettierrc*
+*.log
+*.tgz
+
+# IDE
+.vscode/
+.idea/
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Build artifacts (keep dist/)
+node_modules/

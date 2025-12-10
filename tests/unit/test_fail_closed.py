@@ -2,6 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+from fastapi import BackgroundTasks
 
 from server.config import Settings
 
@@ -53,6 +54,7 @@ class TestFailClosedEndpoint:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -70,7 +72,7 @@ class TestFailClosedEndpoint:
                 )
 
                 with pytest.raises(Exception, match="Database error"):
-                    await validate_action(request, mock_db, mock_project)
+                    await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
     @pytest.mark.asyncio
     async def test_fail_closed_enabled_blocks_on_error(self):
@@ -81,6 +83,7 @@ class TestFailClosedEndpoint:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -97,7 +100,7 @@ class TestFailClosedEndpoint:
                     side_effect=Exception("Database error")
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert response.allowed is False
                 assert response.action_id.startswith("fail-closed-")
@@ -112,6 +115,7 @@ class TestFailClosedEndpoint:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -132,7 +136,7 @@ class TestFailClosedEndpoint:
                     side_effect=Exception("Error")
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert response.reason == custom_reason
 
@@ -146,6 +150,7 @@ class TestFailClosedEndpoint:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -162,7 +167,7 @@ class TestFailClosedEndpoint:
                     side_effect=Exception("Error")
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert response.timestamp is not None
                 assert isinstance(response.timestamp, datetime)
@@ -176,6 +181,7 @@ class TestFailClosedEndpoint:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -192,7 +198,7 @@ class TestFailClosedEndpoint:
                     side_effect=Exception("Error")
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 # Format: fail-closed-{8 hex chars}
                 assert response.action_id.startswith("fail-closed-")
@@ -212,6 +218,9 @@ class TestFailClosedEndpoint:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_project.webhook_enabled = False
+        mock_project.webhook_url = None
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -235,7 +244,8 @@ class TestFailClosedEndpoint:
                     return_value=mock_result
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                with patch("server.routes.validate.record_validation_metrics"):
+                    response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert response.allowed is True
                 assert response.action_id == "test-action-123"
@@ -254,6 +264,7 @@ class TestFailClosedWithDifferentErrors:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -270,7 +281,7 @@ class TestFailClosedWithDifferentErrors:
                     side_effect=OperationalError("statement", {}, Exception("Connection refused"))
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert response.allowed is False
                 assert "fail-closed" in response.action_id
@@ -285,6 +296,7 @@ class TestFailClosedWithDifferentErrors:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -301,7 +313,7 @@ class TestFailClosedWithDifferentErrors:
                     side_effect=asyncio.TimeoutError("Query timeout")
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert response.allowed is False
 
@@ -314,6 +326,7 @@ class TestFailClosedWithDifferentErrors:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -330,7 +343,7 @@ class TestFailClosedWithDifferentErrors:
                     side_effect=RuntimeError("Unexpected internal error")
                 )
 
-                response = await validate_action(request, mock_db, mock_project)
+                response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert response.allowed is False
 
@@ -348,6 +361,7 @@ class TestFailClosedHTTPExceptionHandling:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -367,7 +381,7 @@ class TestFailClosedHTTPExceptionHandling:
 
                 # HTTPException should NOT be caught by fail-closed
                 with pytest.raises(HTTPException) as exc_info:
-                    await validate_action(request, mock_db, mock_project)
+                    await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
                 assert exc_info.value.status_code == 403
                 assert exc_info.value.detail == "Forbidden"
@@ -382,6 +396,7 @@ class TestFailClosedHTTPExceptionHandling:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "project-A"  # Different from request
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="project-B",  # Mismatched
@@ -395,7 +410,7 @@ class TestFailClosedHTTPExceptionHandling:
 
             # Should raise HTTPException, not return fail-closed response
             with pytest.raises(HTTPException) as exc_info:
-                await validate_action(request, mock_db, mock_project)
+                await validate_action(request, mock_background_tasks, mock_db, mock_project)
 
             assert exc_info.value.status_code == 403
             assert "project" in exc_info.value.detail.lower()
@@ -413,6 +428,7 @@ class TestFailClosedActionIdUniqueness:
         mock_db = AsyncMock()
         mock_project = MagicMock()
         mock_project.id = "test-project"
+        mock_background_tasks = MagicMock(spec=BackgroundTasks)
 
         request = ActionRequest(
             project_id="test-project",
@@ -433,7 +449,7 @@ class TestFailClosedActionIdUniqueness:
 
                 # Make 100 calls and collect action_ids
                 for _ in range(100):
-                    response = await validate_action(request, mock_db, mock_project)
+                    response = await validate_action(request, mock_background_tasks, mock_db, mock_project)
                     action_ids.add(response.action_id)
 
         # All 100 should be unique
