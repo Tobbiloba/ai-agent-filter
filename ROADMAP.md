@@ -40,7 +40,7 @@
 | 1.2 | Redis Caching | Critical | Easy | Cache policy lookups. Sub-millisecond validation at scale. ✓ Done |
 | 1.3 | Aggregate Limits | Critical | Medium | Cross-action limits: "max $50K total per day" with rolling windows. Key differentiator. ✓ Done |
 | 1.4 | Fail-Closed Mode | Critical | Easy | Config: if service unreachable, block all actions (not fail-open). ✓ Done |
-| 1.5 | `/metrics` Endpoint | High | Easy | Prometheus metrics: requests/sec, latency p50/p95/p99, error rates. |
+| 1.5 | `/metrics` Endpoint | High | Easy | Prometheus metrics: requests/sec, latency p50/p95/p99, error rates. ✓ Done |
 | 1.6 | Structured Logging | High | Easy | JSON logs with correlation IDs. Compatible with log aggregators. |
 | 1.7 | Graceful Shutdown | Medium | Easy | Drain connections on SIGTERM. Kubernetes-ready. |
 

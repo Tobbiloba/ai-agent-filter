@@ -1,15 +1,61 @@
 """Main FastAPI application."""
 
+import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from server.config import get_settings
 from server.database import init_db, close_db, get_database_type
 from server.cache import init_cache, close_cache, get_cache
 from server.routes import validate_router, policies_router, logs_router, projects_router
+from server.metrics import (
+    HTTP_REQUESTS_TOTAL,
+    HTTP_REQUEST_DURATION_SECONDS,
+    HTTP_REQUESTS_IN_PROGRESS,
+    normalize_endpoint,
+)
 
 settings = get_settings()
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Middleware to collect HTTP request metrics for Prometheus."""
+
+    async def dispatch(self, request: Request, call_next):
+        """Process request and record metrics."""
+        method = request.method
+        # Normalize endpoint to avoid high cardinality
+        endpoint = normalize_endpoint(request.url.path)
+
+        # Skip metrics for the /metrics endpoint itself
+        if request.url.path == "/metrics":
+            return await call_next(request)
+
+        HTTP_REQUESTS_IN_PROGRESS.labels(method=method, endpoint=endpoint).inc()
+        start_time = time.perf_counter()
+
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+        except Exception:
+            status_code = 500
+            raise
+        finally:
+            duration = time.perf_counter() - start_time
+            HTTP_REQUESTS_IN_PROGRESS.labels(method=method, endpoint=endpoint).dec()
+            HTTP_REQUESTS_TOTAL.labels(
+                method=method, endpoint=endpoint, status_code=status_code
+            ).inc()
+            HTTP_REQUEST_DURATION_SECONDS.labels(
+                method=method, endpoint=endpoint
+            ).observe(duration)
+
+        return response
 
 
 @asynccontextmanager
@@ -40,6 +86,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Metrics middleware (must be added after CORS)
+app.add_middleware(MetricsMiddleware)
+
 
 @app.get("/health")
 async def health_check():
@@ -51,6 +100,24 @@ async def health_check():
         "database": get_database_type(),
         "cache": "redis" if cache.is_available else "disabled",
     }
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint.
+
+    Returns metrics in Prometheus text format for scraping.
+    Includes:
+    - http_requests_total: Request count by method, endpoint, status
+    - http_request_duration_seconds: Request latency histogram
+    - http_requests_in_progress: Current in-flight requests
+    - validation_total: Validation requests by project, outcome
+    - validation_duration_seconds: Validation latency histogram
+    """
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 
 @app.get("/")

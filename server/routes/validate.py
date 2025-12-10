@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.config import get_settings
 from server.database import get_db
+from server.metrics import record_validation_metrics
 from server.middleware.auth import get_project_by_api_key
 from server.models import Project
 from server.schemas import ActionRequest, ActionResponse
@@ -67,6 +68,13 @@ async def validate_action(
             )
         # Default: re-raise exception (fail-open)
         raise
+
+    # Record validation metrics
+    record_validation_metrics(
+        project_id=request.project_id,
+        allowed=result.allowed,
+        duration_ms=result.execution_time_ms or 0,
+    )
 
     return ActionResponse(
         allowed=result.allowed,
