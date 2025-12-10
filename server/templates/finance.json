@@ -1,0 +1,36 @@
+{
+  "id": "finance",
+  "name": "Finance & Payments",
+  "description": "Secure defaults for financial operations with amount limits and transfer controls",
+  "policy": {
+    "name": "Finance Policy",
+    "version": "1.0",
+    "rules": [
+      {
+        "action": "send_payment",
+        "constraints": {
+          "amount": {"max": 10000},
+          "currency": {"in": ["USD", "EUR", "GBP"]}
+        },
+        "rate_limit": {"max_requests": 10, "window_seconds": 60},
+        "aggregate_limit": {"field": "amount", "max_sum": 50000, "window_seconds": 86400}
+      },
+      {
+        "action": "wire_transfer",
+        "constraints": {
+          "amount": {"max": 25000},
+          "recipient_country": {"not_in": ["KP", "IR", "SY", "CU"]}
+        },
+        "rate_limit": {"max_requests": 5, "window_seconds": 3600}
+      },
+      {
+        "action": "create_invoice",
+        "constraints": {
+          "amount": {"min": 0.01, "max": 1000000}
+        },
+        "rate_limit": {"max_requests": 100, "window_seconds": 3600}
+      }
+    ],
+    "default": "block"
+  }
+}

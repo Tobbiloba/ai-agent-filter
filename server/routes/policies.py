@@ -1,7 +1,8 @@
 """Policy management endpoints."""
 
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,7 @@ from server.middleware.auth import verify_project_access
 from server.models import Policy, Project
 from server.schemas import PolicyCreate, PolicyResponse
 from server.cache import get_cache
+from server.templates.loader import get_template
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 
@@ -146,3 +148,75 @@ async def get_policy_history(
         )
         for p in policies
     ]
+
+
+@router.post("/{project_id}/from-template/{template_id}", response_model=PolicyResponse)
+async def create_policy_from_template(
+    project_id: str,
+    template_id: str,
+    name: Optional[str] = Query(None, description="Custom name for the policy"),
+    db: AsyncSession = Depends(get_db),
+    project: Project = Depends(verify_project_access),
+):
+    """
+    Create a new policy from a template.
+
+    Available templates:
+    - finance: Financial operations with amount limits and transfer controls
+    - healthcare: PII protection and patient data access controls
+    - general: Basic rate limiting for any use case
+    """
+    template = get_template(template_id)
+    if not template:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Template '{template_id}' not found. Available templates: finance, healthcare, general",
+        )
+
+    # Use custom name or template name
+    policy_name = name or template["policy"]["name"]
+    policy_data = template["policy"]
+
+    # Deactivate existing active policies
+    stmt = (
+        select(Policy)
+        .where(Policy.project_id == project_id)
+        .where(Policy.is_active == True)
+    )
+    result = await db.execute(stmt)
+    existing_policies = result.scalars().all()
+    for existing in existing_policies:
+        existing.is_active = False
+
+    # Create the policy rules JSON
+    rules_json = {
+        "version": policy_data["version"],
+        "default": policy_data["default"],
+        "rules": policy_data["rules"],
+    }
+
+    # Create new policy
+    policy = Policy(
+        project_id=project_id,
+        name=policy_name,
+        version=policy_data["version"],
+        rules=json.dumps(rules_json),
+        is_active=True,
+    )
+    db.add(policy)
+    await db.flush()
+
+    # Invalidate cache for this project's policy
+    cache = get_cache()
+    await cache.invalidate_policy(project_id)
+
+    return PolicyResponse(
+        id=policy.id,
+        project_id=policy.project_id,
+        name=policy.name,
+        version=policy.version,
+        rules=rules_json,
+        is_active=policy.is_active,
+        created_at=policy.created_at,
+        updated_at=policy.updated_at,
+    )

@@ -1,0 +1,16 @@
+{
+  "id": "general",
+  "name": "General Purpose",
+  "description": "Basic rate limiting and sensible defaults for any use case",
+  "policy": {
+    "name": "General Policy",
+    "version": "1.0",
+    "rules": [
+      {
+        "action": "*",
+        "rate_limit": {"max_requests": 100, "window_seconds": 60}
+      }
+    ],
+    "default": "allow"
+  }
+}

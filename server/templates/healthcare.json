@@ -1,0 +1,35 @@
+{
+  "id": "healthcare",
+  "name": "Healthcare & PII Protection",
+  "description": "Block PII patterns like SSN, protect patient data access",
+  "policy": {
+    "name": "Healthcare Policy",
+    "version": "1.0",
+    "rules": [
+      {
+        "action": "query_patient_data",
+        "constraints": {
+          "query": {"not_pattern": "\\b\\d{3}-\\d{2}-\\d{4}\\b"},
+          "fields": {"not_in": ["ssn", "social_security_number", "credit_card"]}
+        },
+        "rate_limit": {"max_requests": 50, "window_seconds": 60}
+      },
+      {
+        "action": "export_data",
+        "constraints": {
+          "format": {"in": ["csv", "json", "pdf"]},
+          "include_pii": {"equals": false}
+        },
+        "rate_limit": {"max_requests": 10, "window_seconds": 3600}
+      },
+      {
+        "action": "send_notification",
+        "constraints": {
+          "content": {"not_pattern": "\\b\\d{3}-\\d{2}-\\d{4}\\b"}
+        },
+        "rate_limit": {"max_requests": 100, "window_seconds": 60}
+      }
+    ],
+    "default": "allow"
+  }
+}

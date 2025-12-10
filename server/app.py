@@ -16,7 +16,7 @@ from server.database import init_db, close_db, get_database_type
 from server.cache import init_cache, close_cache, get_cache
 from server.logging_config import setup_logging
 from server.middleware.correlation import CorrelationIdMiddleware
-from server.routes import validate_router, policies_router, logs_router, projects_router
+from server.routes import validate_router, policies_router, logs_router, projects_router, templates_router
 from server.metrics import (
     HTTP_REQUESTS_TOTAL,
     HTTP_REQUEST_DURATION_SECONDS,
@@ -205,5 +205,6 @@ async def root():
 # Include routers
 app.include_router(validate_router)
 app.include_router(policies_router)
+app.include_router(templates_router)
 app.include_router(logs_router)
 app.include_router(projects_router)

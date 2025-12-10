@@ -57,7 +57,7 @@
 
 | # | Feature | Priority | Complexity | Description |
 |---|---------|----------|------------|-------------|
-| 2.1 | Policy Templates | Critical | Easy | Pre-built policies: Finance, Healthcare, General. Accelerates onboarding. |
+| 2.1 | Policy Templates | Critical | Easy | Pre-built policies: Finance, Healthcare, General. Accelerates onboarding. ✓ Done |
 | 2.2 | Node.js SDK | High | Medium | TypeScript/JavaScript support. Same API as Python SDK. |
 | 2.3 | Webhook Notifications | High | Easy | POST to Slack/Discord/custom URL on blocked actions. |
 | 2.4 | Better Error Messages | High | Easy | Actionable guidance in all error responses. |
@@ -66,7 +66,7 @@
 | 2.7 | Request Timeout Config | Medium | Easy | Configurable timeouts at server and SDK level. |
 
 **Week 2 Definition of Done:**
-- [ ] 3 policy templates ready to use
+- [x] 3 policy templates ready to use
 - [ ] Node.js SDK published to npm
 - [ ] Webhook fires on blocked actions
 - [ ] Policy simulation returns "would block" results
