@@ -41,14 +41,15 @@
 | 1.3 | Aggregate Limits | Critical | Medium | Cross-action limits: "max $50K total per day" with rolling windows. Key differentiator. ✓ Done |
 | 1.4 | Fail-Closed Mode | Critical | Easy | Config: if service unreachable, block all actions (not fail-open). ✓ Done |
 | 1.5 | `/metrics` Endpoint | High | Easy | Prometheus metrics: requests/sec, latency p50/p95/p99, error rates. ✓ Done |
-| 1.6 | Structured Logging | High | Easy | JSON logs with correlation IDs. Compatible with log aggregators. |
+| 1.6 | Structured Logging | High | Easy | JSON logs with correlation IDs. Compatible with log aggregators. ✓ Done |
 | 1.7 | Graceful Shutdown | Medium | Easy | Drain connections on SIGTERM. Kubernetes-ready. |
 
 **Week 1 Definition of Done:**
 - [x] PostgreSQL works in production
 - [x] Redis caching reduces latency to <5ms
 - [x] Aggregate limits block circumvention attacks
-- [ ] `/metrics` endpoint returns Prometheus format
+- [x] `/metrics` endpoint returns Prometheus format
+- [x] Structured logging with correlation IDs
 
 ---
 

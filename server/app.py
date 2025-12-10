@@ -1,5 +1,6 @@
 """Main FastAPI application."""
 
+import logging
 import time
 from contextlib import asynccontextmanager
 
@@ -12,6 +13,8 @@ from starlette.requests import Request
 from server.config import get_settings
 from server.database import init_db, close_db, get_database_type
 from server.cache import init_cache, close_cache, get_cache
+from server.logging_config import setup_logging
+from server.middleware.correlation import CorrelationIdMiddleware
 from server.routes import validate_router, policies_router, logs_router, projects_router
 from server.metrics import (
     HTTP_REQUESTS_TOTAL,
@@ -21,6 +24,7 @@ from server.metrics import (
 )
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):
@@ -55,13 +59,27 @@ class MetricsMiddleware(BaseHTTPMiddleware):
                 method=method, endpoint=endpoint
             ).observe(duration)
 
+            # Log completed request with structured data
+            logger.info(
+                "request_completed",
+                extra={
+                    "method": method,
+                    "path": request.url.path,
+                    "status_code": status_code,
+                    "duration_ms": round(duration * 1000, 2),
+                },
+            )
+
         return response
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup/shutdown."""
-    # Startup
+    # Startup - configure logging first
+    setup_logging(settings.log_level, settings.log_json)
+    logger.info("Starting AI Agent Safety Filter", extra={"version": "0.1.0"})
+
     await init_db()
     await init_cache()
     yield
@@ -85,6 +103,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Correlation ID middleware (must be outermost to capture all requests)
+app.add_middleware(CorrelationIdMiddleware)
 
 # Metrics middleware (must be added after CORS)
 app.add_middleware(MetricsMiddleware)

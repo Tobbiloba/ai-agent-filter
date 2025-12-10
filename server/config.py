@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
 
+    # Logging
+    log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    log_json: bool = True  # JSON format for production, False for human-readable
+
     # Database
     database_url: str = "sqlite+aiosqlite:///./ai_firewall.db"
 
