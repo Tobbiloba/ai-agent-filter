@@ -553,6 +553,7 @@ Document changes in CHANGELOG:
 
 ## Summary Checklist
 
+### Policy Design
 - [ ] Default is "block" (deny-by-default)
 - [ ] Each action type has explicit rules
 - [ ] High-risk actions have agent restrictions
@@ -560,6 +561,11 @@ Document changes in CHANGELOG:
 - [ ] Regex patterns are specific, not overly broad
 - [ ] Critical actions have multiple constraints
 - [ ] Policies are versioned and documented
+
+### Production Configuration
+- [ ] `FAIL_CLOSED=true` - Block actions on service errors
+- [ ] `REDIS_URL` configured - Enable caching for performance
+- [ ] `DATABASE_URL` using PostgreSQL - Not SQLite
 - [ ] Regular audits scheduled
 - [ ] Rollback procedure documented
 

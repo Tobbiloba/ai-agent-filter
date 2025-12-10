@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     cache_ttl_project: int = 600  # 10 minutes
     cache_enabled: bool = True  # Master switch for caching
 
+    # Fail-Closed Mode
+    fail_closed: bool = False  # If True, block actions when service errors occur
+    fail_closed_reason: str = "Service unavailable - fail-closed mode active"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

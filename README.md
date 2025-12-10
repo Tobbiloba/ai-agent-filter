@@ -193,13 +193,15 @@ ai-firewall/
 
 ## Configuration
 
-Environment variables:
+Environment variables (see `.env.example` for full list):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DATABASE_URL` | Database connection | `sqlite+aiosqlite:///./ai_firewall.db` |
 | `SECRET_KEY` | Security key | `change-me-in-production` |
 | `DEBUG` | Enable debug mode | `false` |
+| `REDIS_URL` | Redis URL for caching (optional) | `` (disabled) |
+| `FAIL_CLOSED` | Block actions on service errors | `false` |
 
 ## Development
 

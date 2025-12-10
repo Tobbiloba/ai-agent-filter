@@ -1,14 +1,20 @@
 """Validation endpoint - the core action validation API."""
 
+import logging
+import uuid
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from server.config import get_settings
 from server.database import get_db
 from server.middleware.auth import get_project_by_api_key
 from server.models import Project
 from server.schemas import ActionRequest, ActionResponse
 from server.services import ValidatorService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Validation"])
 
 
@@ -29,6 +35,8 @@ async def validate_action(
     - **action_id**: Unique identifier for this validation (for audit purposes)
     - **reason**: Explanation if the action was blocked
     """
+    settings = get_settings()
+
     # Verify the project_id in request matches the authenticated project
     if request.project_id != project.id:
         raise HTTPException(
@@ -36,13 +44,29 @@ async def validate_action(
             detail=f"API key is for project '{project.id}', not '{request.project_id}'",
         )
 
-    validator = ValidatorService(db)
-    result = await validator.validate_action(
-        project_id=request.project_id,
-        agent_name=request.agent_name,
-        action_type=request.action_type,
-        params=request.params,
-    )
+    try:
+        validator = ValidatorService(db)
+        result = await validator.validate_action(
+            project_id=request.project_id,
+            agent_name=request.agent_name,
+            action_type=request.action_type,
+            params=request.params,
+        )
+    except HTTPException:
+        # Don't catch HTTP exceptions - these are intentional responses (401, 403, etc.)
+        raise
+    except Exception as e:
+        # Fail-closed mode: block action on any service error
+        if settings.fail_closed:
+            logger.error(f"Fail-closed: blocking action due to error: {e}")
+            return ActionResponse(
+                allowed=False,
+                action_id=f"fail-closed-{uuid.uuid4().hex[:8]}",
+                timestamp=datetime.utcnow(),
+                reason=settings.fail_closed_reason,
+            )
+        # Default: re-raise exception (fail-open)
+        raise
 
     return ActionResponse(
         allowed=result.allowed,

@@ -284,6 +284,10 @@ VACUUM;
 | `API_KEY_HEADER` | `X-API-Key` | Header name for API key authentication |
 | `RATE_LIMIT_REQUESTS` | `100` | Default rate limit (requests per window) |
 | `RATE_LIMIT_WINDOW` | `3600` | Rate limit window in seconds |
+| `REDIS_URL` | `` (disabled) | Redis URL for caching (optional) |
+| `CACHE_ENABLED` | `true` | Master switch for caching |
+| `FAIL_CLOSED` | `false` | Block all actions on service errors |
+| `FAIL_CLOSED_REASON` | `Service unavailable...` | Custom message for fail-closed blocks |
 
 ### Configuration Details
 
@@ -373,6 +377,8 @@ DATABASE_URL=postgresql+asyncpg://firewall:SECURE_PASSWORD@db:5432/firewall
 SECRET_KEY=Ks8jF2nL9pQr4tWx6zA1bC3dE5fG7hI8jK0lM2nO4pQ6rS8t
 RATE_LIMIT_REQUESTS=1000
 RATE_LIMIT_WINDOW=3600
+REDIS_URL=redis://redis:6379/0
+FAIL_CLOSED=true
 ```
 
 ---
@@ -387,6 +393,8 @@ RATE_LIMIT_WINDOW=3600
 - [ ] **HTTPS** - Enable TLS via reverse proxy
 - [ ] **Backups** - Configure automated backups
 - [ ] **Monitoring** - Set up health checks and alerts
+- [ ] **FAIL_CLOSED=true** - Block actions on service errors (security-critical)
+- [ ] **REDIS_URL** - Configure Redis for caching (recommended)
 
 ### Security Hardening
 

@@ -25,6 +25,10 @@ The API will be available at `http://localhost:8000`
 | `DEBUG` | Enable debug mode | `false` |
 | `DATABASE_URL` | Database connection string | `sqlite+aiosqlite:///./data/ai_firewall.db` |
 | `SECRET_KEY` | Secret key for security | `change-me-in-production` |
+| `REDIS_URL` | Redis URL for caching | `` (disabled) |
+| `FAIL_CLOSED` | Block actions on service errors | `false` |
+
+See `.env.example` for the complete list of configuration options.
 
 ## Platform Guides
 

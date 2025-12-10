@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Production Features (Week 1 Sprint)
+- **PostgreSQL Support** - Production-ready database with async connection pooling via `asyncpg`
+- **Redis Caching** - Cache policy and API key lookups for sub-millisecond validation
+- **Aggregate Limits** - Cross-action cumulative limits (e.g., "max $50K per day") with rolling windows
+- **Fail-Closed Mode** - Block all actions when service errors occur (`FAIL_CLOSED=true`)
+
+#### New Environment Variables
+- `REDIS_URL` - Redis connection string for caching
+- `CACHE_ENABLED` - Master switch for caching (default: true)
+- `CACHE_TTL_POLICY` - Policy cache TTL in seconds (default: 300)
+- `CACHE_TTL_PROJECT` - Project cache TTL in seconds (default: 600)
+- `FAIL_CLOSED` - Enable fail-closed mode (default: false)
+- `FAIL_CLOSED_REASON` - Custom message for fail-closed blocks
+- `DB_POOL_SIZE` - PostgreSQL connection pool size (default: 5)
+- `DB_MAX_OVERFLOW` - Extra connections beyond pool size (default: 10)
+
+---
+
 ## [0.1.0] - 2025-12-07
 
 ### Added
