@@ -8,7 +8,9 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
 
 from server.config import get_settings
+import logging
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -118,8 +120,14 @@ async def init_db() -> None:
     # Import models to register them with SQLAlchemy
     from server.models import Project, Policy, AuditLog  # noqa: F401
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables initialized successfully")
+    except Exception as e:
+        # Log error but don't crash - app can still serve health checks
+        logger.error(f"Failed to initialize database tables: {e}", exc_info=True)
+        logger.warning("App will continue but database operations may fail until connection is established")
 
 
 async def close_db() -> None:
