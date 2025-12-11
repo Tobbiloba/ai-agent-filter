@@ -36,6 +36,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
+# Default port (Railway overrides via PORT env var)
+ENV PORT=8000
+
 # Run the application with graceful shutdown support
 # --timeout-graceful-shutdown: Wait up to 35s for in-flight requests to complete
-CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "35"]
+# Uses shell form to expand $PORT environment variable
+CMD uvicorn server.app:app --host 0.0.0.0 --port $PORT --timeout-graceful-shutdown 35
