@@ -19,14 +19,27 @@ def _is_pooler_url(url: str) -> bool:
     return "-pooler" in url or "pgbouncer" in url.lower()
 
 
+def _fix_asyncpg_ssl(url: str) -> str:
+    """Fix SSL parameter for asyncpg compatibility.
+
+    asyncpg uses 'ssl' parameter, not 'sslmode' (which is for psycopg2/libpq).
+    This converts sslmode=X to ssl=X for asyncpg URLs.
+    """
+    if "asyncpg" in url and "sslmode=" in url:
+        return url.replace("sslmode=", "ssl=")
+    return url
+
+
 def create_engine_with_config():
     """Create async engine with appropriate config for database type."""
-    is_sqlite = _is_sqlite(settings.database_url)
+    # Fix sslmode for asyncpg compatibility
+    database_url = _fix_asyncpg_ssl(settings.database_url)
+    is_sqlite = _is_sqlite(database_url)
 
     if is_sqlite:
         # SQLite: No connection pooling, use NullPool for async compatibility
         return create_async_engine(
-            settings.database_url,
+            database_url,
             echo=settings.db_echo or settings.debug,
             future=True,
             poolclass=NullPool,
@@ -35,12 +48,12 @@ def create_engine_with_config():
         # PostgreSQL: Full connection pooling
         # Check if using a connection pooler (Neon, Supabase, etc.)
         connect_args = {}
-        if _is_pooler_url(settings.database_url):
+        if _is_pooler_url(database_url):
             # Disable prepared statements for PgBouncer compatibility
             connect_args["prepared_statement_cache_size"] = 0
 
         return create_async_engine(
-            settings.database_url,
+            database_url,
             echo=settings.db_echo or settings.debug,
             future=True,
             pool_size=settings.db_pool_size,
