@@ -80,7 +80,7 @@
 
 | # | Item | Description |
 |---|------|-------------|
-| 3.1 | Landing Page | Single page with hero, problem/solution, code snippet, CTA |
+| 3.1 | Landing Page | Single page with hero, problem/solution, code snippet, CTA ✓ Done |
 | 3.2 | Blog Post 1 | "The $50,000 Mistake: Why Your AI Agent Needs Guardrails" |
 | 3.3 | Blog Post 2 | "Building a Policy Engine for AI Agents in Python" |
 | 3.4 | Blog Post 3 | "Add Safety Guardrails to Your LangChain Agent in 5 Minutes" |

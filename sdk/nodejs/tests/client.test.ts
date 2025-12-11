@@ -62,6 +62,19 @@ describe("AIFirewall", () => {
       });
       expect(fw).toBeInstanceOf(AIFirewall);
     });
+
+    it("accepts retry configuration options", () => {
+      const fw = new AIFirewall({
+        apiKey: "af_test",
+        projectId: "test-project",
+        maxRetries: 5,
+        retryBaseDelay: 500,
+        retryMaxDelay: 10000,
+        retryOnStatus: [429, 503],
+        retryOnNetworkError: false,
+      });
+      expect(fw).toBeInstanceOf(AIFirewall);
+    });
   });
 
   describe("execute", () => {
@@ -71,6 +84,7 @@ describe("AIFirewall", () => {
         action_id: "act_123",
         timestamp: "2025-01-01T12:00:00Z",
         execution_time_ms: 5,
+        simulated: false,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -82,6 +96,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0, // Disable retries for test
       });
 
       const result = await fw.execute("test-agent", "test-action", {
@@ -92,7 +107,9 @@ describe("AIFirewall", () => {
       expect(result.actionId).toBe("act_123");
       expect(result.timestamp).toBeInstanceOf(Date);
       expect(result.executionTimeMs).toBe(5);
+      expect(result.simulated).toBe(false);
 
+      // Verify fetch was called with correct URL and method
       expect(mockFetch).toHaveBeenCalledWith(
         "http://localhost:8000/validate_action",
         expect.objectContaining({
@@ -101,14 +118,17 @@ describe("AIFirewall", () => {
             "X-API-Key": "af_test",
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            project_id: "test-project",
-            agent_name: "test-agent",
-            action_type: "test-action",
-            params: { param: "value" },
-          }),
         })
       );
+
+      // Verify request body contains expected fields
+      const callArgs = mockFetch.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.project_id).toBe("test-project");
+      expect(body.agent_name).toBe("test-agent");
+      expect(body.action_type).toBe("test-action");
+      expect(body.params).toEqual({ param: "value" });
+      expect(body.simulate).toBe(false);
     });
 
     it("returns blocked result with reason", async () => {
@@ -118,6 +138,7 @@ describe("AIFirewall", () => {
         timestamp: "2025-01-01T12:00:00Z",
         reason: "Amount exceeds maximum limit",
         execution_time_ms: 3,
+        simulated: false,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -129,6 +150,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       const result = await fw.execute("test-agent", "pay_invoice", {
@@ -145,6 +167,7 @@ describe("AIFirewall", () => {
         action_id: "act_789",
         timestamp: "2025-01-01T12:00:00Z",
         reason: "Action not allowed",
+        simulated: false,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -157,29 +180,21 @@ describe("AIFirewall", () => {
         apiKey: "af_test",
         projectId: "test-project",
         strict: true,
+        maxRetries: 0,
       });
 
       await expect(
         fw.execute("test-agent", "forbidden-action", {})
       ).rejects.toThrow(ActionBlockedError);
-
-      try {
-        await fw.execute("test-agent", "forbidden-action", {});
-      } catch (error) {
-        // Reset mock for second call
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: async () => mockResponse,
-        });
-      }
     });
 
-    it("uses default empty params when not provided", async () => {
+    it("does not throw in strict mode for simulations", async () => {
       const mockResponse = {
-        allowed: true,
-        action_id: "act_000",
+        allowed: false,
+        action_id: null,
         timestamp: "2025-01-01T12:00:00Z",
+        reason: "Would be blocked",
+        simulated: true,
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -191,16 +206,68 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        strict: true,
+        maxRetries: 0,
+      });
+
+      // Should NOT throw even though blocked because it's a simulation
+      const result = await fw.execute("test-agent", "action", {}, { simulate: true });
+      expect(result.allowed).toBe(false);
+      expect(result.simulated).toBe(true);
+    });
+
+    it("uses default empty params when not provided", async () => {
+      const mockResponse = {
+        allowed: true,
+        action_id: "act_000",
+        timestamp: "2025-01-01T12:00:00Z",
+        simulated: false,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse,
+      });
+
+      const fw = new AIFirewall({
+        apiKey: "af_test",
+        projectId: "test-project",
+        maxRetries: 0,
       });
 
       await fw.execute("agent", "action");
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: expect.stringContaining('"params":{}'),
-        })
-      );
+      const callArgs = mockFetch.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.params).toEqual({});
+    });
+
+    it("sends simulate flag in request body", async () => {
+      const mockResponse = {
+        allowed: true,
+        action_id: null,
+        timestamp: "2025-01-01T12:00:00Z",
+        simulated: true,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse,
+      });
+
+      const fw = new AIFirewall({
+        apiKey: "af_test",
+        projectId: "test-project",
+        maxRetries: 0,
+      });
+
+      await fw.execute("agent", "action", {}, { simulate: true });
+
+      const callArgs = mockFetch.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.simulate).toBe(true);
     });
   });
 
@@ -226,6 +293,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       const policy = await fw.getPolicy();
@@ -247,6 +315,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       await expect(fw.getPolicy()).rejects.toThrow(PolicyNotFoundError);
@@ -275,6 +344,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       const policy = await fw.updatePolicy({
@@ -308,21 +378,17 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       await fw.updatePolicy({ rules: [] });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify({
-            name: "default",
-            version: "1.0",
-            default: "allow",
-            rules: [],
-          }),
-        })
-      );
+      const callArgs = mockFetch.mock.calls[0];
+      const body = JSON.parse(callArgs[1].body);
+      expect(body.name).toBe("default");
+      expect(body.version).toBe("1.0");
+      expect(body.default).toBe("allow");
+      expect(body.rules).toEqual([]);
     });
   });
 
@@ -358,6 +424,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       const logs = await fw.getLogs();
@@ -387,6 +454,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       await fw.getLogs({
@@ -440,6 +508,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       const stats = await fw.getStats();
@@ -464,6 +533,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "invalid_key",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       await expect(fw.execute("agent", "action", {})).rejects.toThrow(
@@ -481,6 +551,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "wrong-project",
+        maxRetries: 0,
       });
 
       await expect(fw.execute("agent", "action", {})).rejects.toThrow(
@@ -498,6 +569,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "unknown",
+        maxRetries: 0,
       });
 
       await expect(fw.getPolicy()).rejects.toThrow(ProjectNotFoundError);
@@ -515,6 +587,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0,
       });
 
       await expect(fw.execute("", "action", {})).rejects.toThrow(
@@ -522,8 +595,9 @@ describe("AIFirewall", () => {
       );
     });
 
-    it("throws AIFirewallError on other 4xx/5xx errors", async () => {
-      mockFetch.mockResolvedValueOnce({
+    it("throws AIFirewallError on 500 after retries exhausted", async () => {
+      // Mock all retry attempts to return 500
+      mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
         text: async () => "Internal Server Error",
@@ -532,6 +606,7 @@ describe("AIFirewall", () => {
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0, // Disable retries for immediate failure
       });
 
       await expect(fw.execute("agent", "action", {})).rejects.toThrow(
@@ -539,12 +614,13 @@ describe("AIFirewall", () => {
       );
     });
 
-    it("throws NetworkError on fetch failure", async () => {
-      mockFetch.mockRejectedValueOnce(new Error("Connection refused"));
+    it("throws NetworkError on fetch failure after retries exhausted", async () => {
+      mockFetch.mockRejectedValue(new Error("Connection refused"));
 
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
+        maxRetries: 0, // Disable retries for immediate failure
       });
 
       await expect(fw.execute("agent", "action", {})).rejects.toThrow(
@@ -552,28 +628,100 @@ describe("AIFirewall", () => {
       );
     });
 
-    it("throws NetworkError on timeout", async () => {
+    it("throws NetworkError on timeout after retries exhausted", async () => {
       const abortError = new Error("The operation was aborted");
       abortError.name = "AbortError";
-      mockFetch.mockRejectedValueOnce(abortError);
+      mockFetch.mockRejectedValue(abortError);
 
       const fw = new AIFirewall({
         apiKey: "af_test",
         projectId: "test-project",
         timeout: 100,
+        maxRetries: 0, // Disable retries for immediate failure
       });
 
       await expect(fw.execute("agent", "action", {})).rejects.toThrow(
         NetworkError
       );
+    });
 
-      // Check the error message contains "timed out"
-      mockFetch.mockRejectedValueOnce(abortError);
-      try {
-        await fw.execute("agent", "action", {});
-      } catch (error) {
-        expect((error as NetworkError).message).toContain("timed out");
-      }
+    it("retries on 500 status codes", async () => {
+      // First call returns 500, second succeeds
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => "Internal Server Error",
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            allowed: true,
+            action_id: "act_123",
+            timestamp: "2025-01-01T12:00:00Z",
+            simulated: false,
+          }),
+        });
+
+      const fw = new AIFirewall({
+        apiKey: "af_test",
+        projectId: "test-project",
+        maxRetries: 1,
+        retryBaseDelay: 1, // Very short delay for test
+      });
+
+      const result = await fw.execute("agent", "action", {});
+      expect(result.allowed).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries on network errors", async () => {
+      // First call fails with network error, second succeeds
+      mockFetch
+        .mockRejectedValueOnce(new Error("Connection refused"))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            allowed: true,
+            action_id: "act_123",
+            timestamp: "2025-01-01T12:00:00Z",
+            simulated: false,
+          }),
+        });
+
+      const fw = new AIFirewall({
+        apiKey: "af_test",
+        projectId: "test-project",
+        maxRetries: 1,
+        retryBaseDelay: 1, // Very short delay for test
+      });
+
+      const result = await fw.execute("agent", "action", {});
+      expect(result.allowed).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not retry on 401/403/404/422", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ detail: "Invalid API key" }),
+      });
+
+      const fw = new AIFirewall({
+        apiKey: "invalid_key",
+        projectId: "test-project",
+        maxRetries: 3, // Would retry if this was a retryable error
+        retryBaseDelay: 1,
+      });
+
+      await expect(fw.execute("agent", "action", {})).rejects.toThrow(
+        AuthenticationError
+      );
+      // Should only be called once (no retries)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 

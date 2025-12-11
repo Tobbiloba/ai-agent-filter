@@ -9,8 +9,8 @@ A lightweight middleware that intercepts AI agent actions, validates them agains
 - **Action Validation**: Validate agent actions against configurable policies before execution
 - **Policy-as-Code**: Define rules for parameter constraints, rate limits, and agent permissions
 - **Audit Logging**: Complete audit trail of all allowed and blocked actions
-- **Python SDK**: Easy integration with any Python-based AI agent framework
-- **Framework Agnostic**: Works with CrewAI, LangChain, OpenAI Agents, and more
+- **Multi-Language SDKs**: Python and Node.js/TypeScript SDKs for easy integration
+- **Framework Agnostic**: Works with CrewAI, LangChain, OpenAI Agents, Vercel AI SDK, and more
 - **Fast**: Sub-millisecond validation latency
 
 ## Quick Start
@@ -69,11 +69,21 @@ curl -X POST http://localhost:8000/policies/my-project \
 
 ### 4. Install the SDK
 
+#### Python
+
 ```bash
 pip install -e sdk/python
 ```
 
+#### Node.js / TypeScript
+
+```bash
+npm install @ai-agent-filter/sdk
+```
+
 ### 5. Protect Your Agent
+
+#### Python
 
 ```python
 from ai_firewall import AIFirewall
@@ -97,6 +107,33 @@ if result.allowed:
 else:
     # Action blocked
     print(f"Blocked: {result.reason}")
+```
+
+#### Node.js / TypeScript
+
+```typescript
+import { AIFirewall } from '@ai-agent-filter/sdk';
+
+const fw = new AIFirewall({
+  apiKey: 'YOUR_API_KEY',
+  projectId: 'my-project',
+  baseUrl: 'http://localhost:8000',
+});
+
+// Before executing any agent action:
+const result = await fw.execute('invoice_agent', 'pay_invoice', {
+  vendor: 'Acme',
+  amount: 5000,
+  currency: 'USD',
+});
+
+if (result.allowed) {
+  // Safe to proceed
+  await executePayment();
+} else {
+  // Action blocked
+  console.log(`Blocked: ${result.reason}`);
+}
 ```
 
 ## Policy Rules
@@ -149,12 +186,26 @@ else:
 | `GET` | `/logs/{project_id}` | Get audit logs |
 | `GET` | `/logs/{project_id}/stats` | Get log statistics |
 
+## SDKs
+
+| Language | Package | Documentation |
+|----------|---------|---------------|
+| Python | `pip install ai-firewall` | [sdk/python/README.md](sdk/python/README.md) |
+| Node.js/TypeScript | `npm install @ai-agent-filter/sdk` | [sdk/nodejs/README.md](sdk/nodejs/README.md) |
+
 ## Integration Examples
 
 See the `examples/` directory for integration patterns:
 
+### Python
 - **CrewAI**: Decorator, context manager, and wrapper patterns
 - **OpenAI Agents**: Protected tool executor for function calling
+
+### Node.js / TypeScript
+- **LangChain.js**: Tool wrapper with `withFirewall()` higher-order function
+- **Vercel AI SDK**: Tool integration with validation
+- **Express.js**: Middleware for protecting API endpoints
+- **Next.js**: Route handler and server action protection
 
 ## Deployment
 
@@ -184,7 +235,8 @@ ai-firewall/
 │   ├── services/     # Business logic
 │   └── schemas/      # Pydantic schemas
 ├── sdk/
-│   └── python/       # Python SDK
+│   ├── python/       # Python SDK
+│   └── nodejs/       # Node.js/TypeScript SDK
 ├── examples/         # Integration examples
 ├── deploy/           # Deployment guides
 ├── Dockerfile
