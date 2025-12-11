@@ -14,6 +14,11 @@ def _is_sqlite(url: str) -> bool:
     return url.startswith("sqlite")
 
 
+def _is_pooler_url(url: str) -> bool:
+    """Check if database URL uses a connection pooler (e.g., Neon's PgBouncer)."""
+    return "-pooler" in url or "pgbouncer" in url.lower()
+
+
 def create_engine_with_config():
     """Create async engine with appropriate config for database type."""
     is_sqlite = _is_sqlite(settings.database_url)
@@ -28,6 +33,12 @@ def create_engine_with_config():
         )
     else:
         # PostgreSQL: Full connection pooling
+        # Check if using a connection pooler (Neon, Supabase, etc.)
+        connect_args = {}
+        if _is_pooler_url(settings.database_url):
+            # Disable prepared statements for PgBouncer compatibility
+            connect_args["prepared_statement_cache_size"] = 0
+
         return create_async_engine(
             settings.database_url,
             echo=settings.db_echo or settings.debug,
@@ -37,6 +48,7 @@ def create_engine_with_config():
             pool_timeout=settings.db_pool_timeout,
             pool_recycle=settings.db_pool_recycle,
             pool_pre_ping=True,  # Verify connections before use
+            connect_args=connect_args,
         )
 
 
