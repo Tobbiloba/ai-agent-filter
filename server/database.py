@@ -23,10 +23,22 @@ def _fix_asyncpg_ssl(url: str) -> str:
     """Fix SSL parameter for asyncpg compatibility.
 
     asyncpg uses 'ssl' parameter, not 'sslmode' (which is for psycopg2/libpq).
-    This converts sslmode=X to ssl=X for asyncpg URLs.
+    For Neon and other cloud PostgreSQL providers, ssl=true works best.
     """
-    if "asyncpg" in url and "sslmode=" in url:
-        return url.replace("sslmode=", "ssl=")
+    if "asyncpg" in url:
+        # Replace sslmode=X with ssl=true (most compatible format for asyncpg)
+        if "sslmode=" in url:
+            # Remove sslmode parameter and add ssl=true
+            import re
+            url = re.sub(r'[?&]sslmode=[^&]*', '', url)
+            # Add ssl=true
+            if "?" in url:
+                url += "&ssl=true"
+            else:
+                url += "?ssl=true"
+        # Also handle if ssl=require was set (convert to ssl=true)
+        elif "ssl=require" in url:
+            url = url.replace("ssl=require", "ssl=true")
     return url
 
 
