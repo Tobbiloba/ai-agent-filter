@@ -14,6 +14,10 @@ class ActionRequest(BaseModel):
     params: dict[str, Any] = Field(
         default_factory=dict, description="Parameters for the action"
     )
+    simulate: bool = Field(
+        default=False,
+        description="If true, run validation without logging or affecting state (what-if mode)",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -22,6 +26,7 @@ class ActionRequest(BaseModel):
                 "agent_name": "invoice_agent",
                 "action_type": "pay_invoice",
                 "params": {"vendor": "VendorA", "amount": 5000, "currency": "USD"},
+                "simulate": False,
             }
         }
     }
@@ -31,13 +36,19 @@ class ActionResponse(BaseModel):
     """Response schema for action validation."""
 
     allowed: bool = Field(..., description="Whether the action is allowed")
-    action_id: str = Field(..., description="Unique identifier for this action")
+    action_id: str | None = Field(
+        ..., description="Unique identifier for this action (None for simulations)"
+    )
     timestamp: datetime = Field(..., description="When the validation occurred")
     reason: str | None = Field(
         None, description="Reason for blocking (only present if blocked)"
     )
     execution_time_ms: int | None = Field(
         None, description="Time taken to validate in milliseconds"
+    )
+    simulated: bool = Field(
+        default=False,
+        description="True if this was a simulation (no audit log created)",
     )
 
     model_config = {
@@ -48,6 +59,7 @@ class ActionResponse(BaseModel):
                     "action_id": "act_abc123def456",
                     "timestamp": "2025-12-07T10:30:00Z",
                     "execution_time_ms": 5,
+                    "simulated": False,
                 },
                 {
                     "allowed": False,
@@ -55,6 +67,14 @@ class ActionResponse(BaseModel):
                     "timestamp": "2025-12-07T10:30:00Z",
                     "reason": "Amount 15000 exceeds maximum allowed 10000",
                     "execution_time_ms": 3,
+                    "simulated": False,
+                },
+                {
+                    "allowed": True,
+                    "action_id": None,
+                    "timestamp": "2025-12-07T10:30:00Z",
+                    "execution_time_ms": 2,
+                    "simulated": True,
                 },
             ]
         }

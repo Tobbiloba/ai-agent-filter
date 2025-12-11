@@ -36,6 +36,7 @@ export type {
   Stats,
   UpdatePolicyOptions,
   GetLogsOptions,
+  ExecuteOptions,
 } from "./types.js";
 
 // Errors

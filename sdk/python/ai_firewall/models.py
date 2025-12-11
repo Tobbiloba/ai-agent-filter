@@ -10,20 +10,22 @@ class ValidationResult:
     """Result of an action validation."""
 
     allowed: bool
-    action_id: str
+    action_id: str | None
     timestamp: datetime
     reason: str | None = None
     execution_time_ms: int | None = None
+    simulated: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> "ValidationResult":
         """Create from API response dictionary."""
         return cls(
             allowed=data["allowed"],
-            action_id=data["action_id"],
+            action_id=data.get("action_id"),  # None for simulations
             timestamp=datetime.fromisoformat(data["timestamp"].rstrip("Z")),
             reason=data.get("reason"),
             execution_time_ms=data.get("execution_time_ms"),
+            simulated=data.get("simulated", False),
         )
 
 

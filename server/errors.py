@@ -27,9 +27,10 @@ class ErrorCode(str, Enum):
     INVALID_POLICY = "invalid_policy"
     INVALID_FIELD = "invalid_field"
 
-    # Server Error (500/503)
+    # Server Error (500/503/504)
     SERVICE_UNAVAILABLE = "service_unavailable"
     INTERNAL_ERROR = "internal_error"
+    REQUEST_TIMEOUT = "request_timeout"
 
 
 # Error message templates with hints
@@ -92,6 +93,10 @@ ERROR_MESSAGES: dict[ErrorCode, dict] = {
     ErrorCode.INTERNAL_ERROR: {
         "message": "An unexpected error occurred",
         "hint": "Please retry your request. If the problem persists, contact support.",
+    },
+    ErrorCode.REQUEST_TIMEOUT: {
+        "message": "Request timed out",
+        "hint": "The server took too long to process your request. Try again or reduce the complexity of your request.",
     },
 }
 

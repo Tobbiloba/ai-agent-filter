@@ -33,10 +33,14 @@ async def validate_action(
     This is the main endpoint for the firewall. Call this before executing
     any agent action to check if it's allowed.
 
+    Set `simulate=true` to test policies without affecting production state
+    (what-if mode). Simulations do not create audit logs or trigger webhooks.
+
     Returns:
     - **allowed**: True if the action can proceed, False if blocked
-    - **action_id**: Unique identifier for this validation (for audit purposes)
+    - **action_id**: Unique identifier for this validation (None for simulations)
     - **reason**: Explanation if the action was blocked
+    - **simulated**: True if this was a simulation
     """
     settings = get_settings()
 
@@ -54,6 +58,7 @@ async def validate_action(
             agent_name=request.agent_name,
             action_type=request.action_type,
             params=request.params,
+            simulate=request.simulate,
         )
     except HTTPException:
         # Don't catch HTTP exceptions - these are intentional responses (401, 403, etc.)
@@ -67,11 +72,12 @@ async def validate_action(
                 action_id=f"fail-closed-{uuid.uuid4().hex[:8]}",
                 timestamp=datetime.utcnow(),
                 reason=settings.fail_closed_reason,
+                simulated=request.simulate,
             )
         # Default: re-raise exception (fail-open)
         raise
 
-    # Record validation metrics
+    # Record validation metrics (even for simulations, for observability)
     record_validation_metrics(
         project_id=request.project_id,
         allowed=result.allowed,
@@ -79,7 +85,13 @@ async def validate_action(
     )
 
     # Send webhook if action blocked and webhook configured
-    if not result.allowed and project.webhook_enabled and project.webhook_url:
+    # Skip webhooks for simulations to avoid alerting on test requests
+    if (
+        not result.allowed
+        and not request.simulate
+        and project.webhook_enabled
+        and project.webhook_url
+    ):
         webhook_service = get_webhook_service()
         background_tasks.add_task(
             webhook_service.send_blocked_action_webhook,
@@ -98,4 +110,5 @@ async def validate_action(
         timestamp=result.timestamp,
         reason=result.reason,
         execution_time_ms=result.execution_time_ms,
+        simulated=result.simulated,
     )

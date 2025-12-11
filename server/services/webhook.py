@@ -20,14 +20,17 @@ WEBHOOK_SENT_TOTAL = Counter(
 class WebhookService:
     """Service for sending webhook notifications."""
 
-    def __init__(self, timeout: float = 5.0, max_retries: int = 3):
+    def __init__(self, timeout: float | None = None, max_retries: int = 3):
         """Initialize the webhook service.
 
         Args:
-            timeout: HTTP request timeout in seconds
+            timeout: HTTP request timeout in seconds (default: from config)
             max_retries: Maximum number of retry attempts
         """
-        self.timeout = timeout
+        from server.config import get_settings
+
+        settings = get_settings()
+        self.timeout = timeout if timeout is not None else settings.webhook_timeout
         self.max_retries = max_retries
 
     async def send_blocked_action_webhook(

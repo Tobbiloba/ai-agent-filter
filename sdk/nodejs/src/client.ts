@@ -20,6 +20,7 @@ import type {
   Stats,
   UpdatePolicyOptions,
   GetLogsOptions,
+  ExecuteOptions,
   AuditLogEntry,
   ApiValidationResponse,
   ApiPolicyResponse,
@@ -50,17 +51,34 @@ import type {
  * // Or use strict mode (throws if blocked)
  * const fwStrict = new AIFirewall({ ...options, strict: true });
  * const result = await fwStrict.execute(...); // Throws ActionBlockedError if blocked
+ *
+ * // With retry configuration
+ * const fwRetry = new AIFirewall({
+ *   apiKey: "af_xxx",
+ *   projectId: "my-project",
+ *   maxRetries: 3,
+ *   retryBaseDelay: 1000,
+ * });
  * ```
  */
 export class AIFirewall {
   static readonly DEFAULT_BASE_URL = "http://localhost:8000";
   static readonly DEFAULT_TIMEOUT = 30000;
+  static readonly DEFAULT_MAX_RETRIES = 3;
+  static readonly DEFAULT_RETRY_BASE_DELAY = 1000;
+  static readonly DEFAULT_RETRY_MAX_DELAY = 30000;
+  static readonly DEFAULT_RETRY_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 
   private readonly apiKey: string;
   private readonly projectId: string;
   private readonly baseUrl: string;
   private readonly timeout: number;
   private readonly strict: boolean;
+  private readonly maxRetries: number;
+  private readonly retryBaseDelay: number;
+  private readonly retryMaxDelay: number;
+  private readonly retryOnStatus: Set<number>;
+  private readonly retryOnNetworkError: boolean;
 
   /**
    * Initialize the AI Firewall client.
@@ -76,6 +94,13 @@ export class AIFirewall {
     );
     this.timeout = options.timeout ?? AIFirewall.DEFAULT_TIMEOUT;
     this.strict = options.strict ?? false;
+
+    // Retry configuration
+    this.maxRetries = options.maxRetries ?? AIFirewall.DEFAULT_MAX_RETRIES;
+    this.retryBaseDelay = options.retryBaseDelay ?? AIFirewall.DEFAULT_RETRY_BASE_DELAY;
+    this.retryMaxDelay = options.retryMaxDelay ?? AIFirewall.DEFAULT_RETRY_MAX_DELAY;
+    this.retryOnStatus = new Set(options.retryOnStatus ?? AIFirewall.DEFAULT_RETRY_STATUS_CODES);
+    this.retryOnNetworkError = options.retryOnNetworkError ?? true;
   }
 
   /**
@@ -84,29 +109,36 @@ export class AIFirewall {
    * @param agentName - Name of the agent performing the action
    * @param actionType - Type of action being performed
    * @param params - Parameters for the action
-   * @returns ValidationResult with allowed status, action_id, and reason if blocked
-   * @throws ActionBlockedError if strict=true and action is blocked
+   * @param options - Optional settings including simulate mode
+   * @returns ValidationResult with allowed status, action_id, and reason if blocked.
+   *          For simulations, actionId will be null and simulated will be true.
+   * @throws ActionBlockedError if strict=true and action is blocked (not thrown for simulations)
    * @throws AuthenticationError if API key is invalid
    * @throws NetworkError if network request fails
    */
   async execute(
     agentName: string,
     actionType: string,
-    params: Record<string, unknown> = {}
+    params: Record<string, unknown> = {},
+    options: ExecuteOptions = {}
   ): Promise<ValidationResult> {
+    const simulate = options.simulate ?? false;
+
     const response = (await this.request("POST", "/validate_action", {
       project_id: this.projectId,
       agent_name: agentName,
       action_type: actionType,
       params,
+      simulate,
     })) as ApiValidationResponse;
 
     const result = this.parseValidationResult(response);
 
-    if (this.strict && !result.allowed) {
+    // Don't raise ActionBlockedError for simulations (they're expected to test blocked scenarios)
+    if (this.strict && !result.allowed && !simulate) {
       throw new ActionBlockedError(
         result.reason ?? "Action blocked by policy",
-        result.actionId
+        result.actionId ?? "simulated"
       );
     }
 
@@ -199,81 +231,153 @@ export class AIFirewall {
   }
 
   /**
-   * Make an HTTP request to the API.
+   * Calculate delay with exponential backoff and jitter.
+   */
+  private calculateBackoff(attempt: number): number {
+    let delay = this.retryBaseDelay * Math.pow(2, attempt);
+    delay = Math.min(delay, this.retryMaxDelay);
+    // Add jitter (±25%) to prevent thundering herd
+    const jitter = delay * 0.25 * (Math.random() * 2 - 1);
+    return Math.max(0, delay + jitter);
+  }
+
+  /**
+   * Check if the HTTP status code should be retried.
+   */
+  private isRetryableStatus(statusCode: number): boolean {
+    return this.retryOnStatus.has(statusCode);
+  }
+
+  /**
+   * Sleep for a specified duration.
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Handle error responses and throw appropriate exceptions.
+   */
+  private async handleResponseError(response: Response): Promise<never> {
+    if (response.status === 401) {
+      throw new AuthenticationError("Missing or invalid API key");
+    }
+
+    if (response.status === 403) {
+      throw new AuthenticationError(
+        "API key does not have access to this resource"
+      );
+    }
+
+    if (response.status === 404) {
+      const data = (await response.json()) as { detail?: string };
+      const detail = data.detail ?? "";
+
+      if (detail.toLowerCase().includes("policy")) {
+        throw new PolicyNotFoundError(detail);
+      }
+      if (detail.toLowerCase().includes("project")) {
+        throw new ProjectNotFoundError(detail);
+      }
+      throw new AIFirewallError(detail || "Resource not found");
+    }
+
+    if (response.status === 422) {
+      const data = await response.json();
+      throw new ValidationError(`Invalid request: ${JSON.stringify(data)}`);
+    }
+
+    const text = await response.text();
+    throw new AIFirewallError(`API error ${response.status}: ${text}`);
+  }
+
+  /**
+   * Make an HTTP request to the API with automatic retry on transient failures.
+   *
+   * Retries on:
+   * - Network errors (connection refused, timeout, etc.) if retryOnNetworkError=true
+   * - HTTP status codes in retryOnStatus (default: 429, 500, 502, 503, 504)
+   *
+   * Does NOT retry on:
+   * - 401 Unauthorized (invalid API key)
+   * - 403 Forbidden (access denied)
+   * - 404 Not Found
+   * - 422 Validation Error
    */
   private async request(
     method: string,
     path: string,
     body?: unknown
   ): Promise<unknown> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    let lastError: Error | undefined;
 
-    try {
-      const url = `${this.baseUrl}${path}`;
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "X-API-Key": this.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      // Handle error responses
-      if (response.status === 401) {
-        throw new AuthenticationError("Missing or invalid API key");
-      }
+      try {
+        const url = `${this.baseUrl}${path}`;
+        const response = await fetch(url, {
+          method,
+          headers: {
+            "X-API-Key": this.apiKey,
+            "Content-Type": "application/json",
+          },
+          body: body ? JSON.stringify(body) : undefined,
+          signal: controller.signal,
+        });
 
-      if (response.status === 403) {
-        throw new AuthenticationError(
-          "API key does not have access to this resource"
-        );
-      }
+        clearTimeout(timeoutId);
 
-      if (response.status === 404) {
-        const data = (await response.json()) as { detail?: string };
-        const detail = data.detail ?? "";
-
-        if (detail.toLowerCase().includes("policy")) {
-          throw new PolicyNotFoundError(detail);
+        // Check if we got a retryable status code
+        if (this.isRetryableStatus(response.status)) {
+          if (attempt < this.maxRetries) {
+            const delay = this.calculateBackoff(attempt);
+            await this.sleep(delay);
+            continue;
+          }
+          // Last attempt - throw the error
+          await this.handleResponseError(response);
         }
-        if (detail.toLowerCase().includes("project")) {
-          throw new ProjectNotFoundError(detail);
+
+        // Non-retryable error
+        if (!response.ok) {
+          await this.handleResponseError(response);
         }
-        throw new AIFirewallError(detail || "Resource not found");
-      }
 
-      if (response.status === 422) {
-        const data = await response.json();
-        throw new ValidationError(`Invalid request: ${JSON.stringify(data)}`);
-      }
+        return response.json();
+      } catch (error) {
+        clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new AIFirewallError(
-          `API error ${response.status}: ${text}`
-        );
-      }
+        // Re-throw our own errors (non-retryable)
+        if (error instanceof AIFirewallError) {
+          throw error;
+        }
 
-      return response.json();
-    } catch (error) {
-      // Re-throw our own errors
-      if (error instanceof AIFirewallError) {
-        throw error;
-      }
+        // Handle timeout/abort
+        if (error instanceof Error && error.name === "AbortError") {
+          lastError = new NetworkError("Request timed out");
+          if (!this.retryOnNetworkError || attempt >= this.maxRetries) {
+            throw lastError;
+          }
+          const delay = this.calculateBackoff(attempt);
+          await this.sleep(delay);
+          continue;
+        }
 
-      // Handle timeout/abort
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new NetworkError("Request timed out");
+        // Handle other network errors
+        lastError = new NetworkError(`Network error: ${error}`);
+        if (!this.retryOnNetworkError || attempt >= this.maxRetries) {
+          throw lastError;
+        }
+        const delay = this.calculateBackoff(attempt);
+        await this.sleep(delay);
+        continue;
       }
-
-      // Handle other network errors
-      throw new NetworkError(`Network error: ${error}`);
-    } finally {
-      clearTimeout(timeoutId);
     }
+
+    // Should not reach here, but handle edge case
+    throw lastError ?? new AIFirewallError("Unexpected error in request retry loop");
   }
 
   /**
@@ -286,6 +390,7 @@ export class AIFirewall {
       timestamp: new Date(data.timestamp.replace("Z", "")),
       reason: data.reason,
       executionTimeMs: data.execution_time_ms,
+      simulated: data.simulated ?? false,
     };
   }
 

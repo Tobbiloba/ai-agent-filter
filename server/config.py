@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     # Graceful Shutdown
     shutdown_timeout: int = 30  # Seconds to wait for in-flight requests to drain
 
+    # Request Timeouts
+    request_timeout: float = 30.0  # Global HTTP request timeout (seconds)
+    webhook_timeout: float = 5.0  # Webhook delivery timeout (seconds)
+    regex_timeout: float = 1.0  # Regex pattern matching timeout (seconds)
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

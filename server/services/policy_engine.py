@@ -8,11 +8,14 @@ from datetime import datetime, timedelta
 from typing import Any
 
 
-# Regex timeout in seconds
-REGEX_TIMEOUT = 1.0
-
 # Thread pool for regex execution with timeout
 _regex_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="regex_worker")
+
+
+def _get_regex_timeout() -> float:
+    """Get regex timeout from config (lazy load to avoid circular imports)."""
+    from server.config import get_settings
+    return get_settings().regex_timeout
 
 
 class RegexTimeoutError(Exception):
@@ -20,12 +23,20 @@ class RegexTimeoutError(Exception):
     pass
 
 
-def safe_regex_match(pattern: str, value: str, timeout: float = REGEX_TIMEOUT) -> bool:
+def safe_regex_match(pattern: str, value: str, timeout: float | None = None) -> bool:
     """
     Safely execute regex match with timeout protection against ReDoS.
     Returns True if pattern matches, False otherwise.
     Raises RegexTimeoutError if matching takes too long.
+
+    Args:
+        pattern: Regex pattern to match
+        value: String to match against
+        timeout: Timeout in seconds (default: from config)
     """
+    if timeout is None:
+        timeout = _get_regex_timeout()
+
     def do_match():
         return re.match(pattern, value) is not None
 
@@ -36,12 +47,20 @@ def safe_regex_match(pattern: str, value: str, timeout: float = REGEX_TIMEOUT) -
         raise RegexTimeoutError(f"Regex pattern matching timed out after {timeout}s")
 
 
-def safe_regex_search(pattern: str, value: str, timeout: float = REGEX_TIMEOUT) -> bool:
+def safe_regex_search(pattern: str, value: str, timeout: float | None = None) -> bool:
     """
     Safely execute regex search with timeout protection against ReDoS.
     Returns True if pattern is found, False otherwise.
     Raises RegexTimeoutError if matching takes too long.
+
+    Args:
+        pattern: Regex pattern to search for
+        value: String to search in
+        timeout: Timeout in seconds (default: from config)
     """
+    if timeout is None:
+        timeout = _get_regex_timeout()
+
     def do_search():
         return re.search(pattern, value) is not None
 

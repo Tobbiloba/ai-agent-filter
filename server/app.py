@@ -18,6 +18,7 @@ from server.database import init_db, close_db, get_database_type
 from server.cache import init_cache, close_cache, get_cache
 from server.logging_config import setup_logging
 from server.middleware.correlation import CorrelationIdMiddleware
+from server.middleware.timeout import RequestTimeoutMiddleware
 from server.routes import validate_router, policies_router, logs_router, projects_router, templates_router
 from server.metrics import (
     HTTP_REQUESTS_TOTAL,
@@ -138,6 +139,9 @@ app.add_middleware(
 
 # Correlation ID middleware (must be outermost to capture all requests)
 app.add_middleware(CorrelationIdMiddleware)
+
+# Request timeout middleware (enforces global request timeout)
+app.add_middleware(RequestTimeoutMiddleware, timeout=settings.request_timeout)
 
 # Metrics middleware (must be added after CORS)
 app.add_middleware(MetricsMiddleware)

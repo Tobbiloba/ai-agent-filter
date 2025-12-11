@@ -23,10 +23,11 @@ class ActionValidationResult:
     """Complete result of an action validation."""
 
     allowed: bool
-    action_id: str
+    action_id: str | None
     reason: str | None = None
     timestamp: datetime = None
     execution_time_ms: int = None
+    simulated: bool = False
 
     def __post_init__(self):
         if self.timestamp is None:
@@ -38,6 +39,7 @@ class ActionValidationResult:
             "allowed": self.allowed,
             "action_id": self.action_id,
             "timestamp": self.timestamp.isoformat() + "Z",
+            "simulated": self.simulated,
         }
         if not self.allowed and self.reason:
             result["reason"] = self.reason
@@ -60,6 +62,7 @@ class ValidatorService:
         agent_name: str,
         action_type: str,
         params: dict[str, Any],
+        simulate: bool = False,
     ) -> ActionValidationResult:
         """
         Validate an action against the project's active policy.
@@ -68,7 +71,15 @@ class ValidatorService:
         1. Basic policy rules (constraints, rate limits, agent lists)
         2. Aggregate limits (cumulative limits across time windows)
 
-        Returns the validation result and logs the attempt.
+        Args:
+            project_id: The project identifier
+            agent_name: Name of the agent performing the action
+            action_type: Type of action being performed
+            params: Action parameters
+            simulate: If True, run validation without logging or affecting state
+                     (what-if mode for testing policies)
+
+        Returns the validation result and logs the attempt (unless simulating).
         """
         start_time = time.perf_counter()
 
@@ -76,7 +87,7 @@ class ValidatorService:
         policy = await self._get_active_policy(project_id)
 
         if policy is None:
-            # No policy = allow by default (but still log)
+            # No policy = allow by default (but still log unless simulating)
             result = ValidationResult(allowed=True, reason="No policy configured")
             policy_version = None
             policy_rules = json.dumps({"default": "allow", "rules": []})
@@ -99,6 +110,17 @@ class ValidatorService:
                     result = aggregate_result
 
         execution_time_ms = int((time.perf_counter() - start_time) * 1000)
+
+        # In simulation mode, skip audit logging and cache invalidation
+        if simulate:
+            return ActionValidationResult(
+                allowed=result.allowed,
+                action_id=None,  # No action_id for simulations
+                reason=result.reason,
+                timestamp=datetime.utcnow(),
+                execution_time_ms=execution_time_ms,
+                simulated=True,
+            )
 
         # Create audit log entry
         audit_log = AuditLog(
@@ -127,6 +149,7 @@ class ValidatorService:
             reason=result.reason,
             timestamp=audit_log.timestamp,
             execution_time_ms=execution_time_ms,
+            simulated=False,
         )
 
     async def _check_aggregate_limits(

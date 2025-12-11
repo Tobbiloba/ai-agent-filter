@@ -16,6 +16,16 @@ export interface AIFirewallOptions {
   timeout?: number;
   /** If true, raise ActionBlockedError when actions are blocked */
   strict?: boolean;
+  /** Maximum number of retry attempts (default: 3, set to 0 to disable) */
+  maxRetries?: number;
+  /** Base delay in milliseconds for exponential backoff (default: 1000) */
+  retryBaseDelay?: number;
+  /** Maximum delay cap in milliseconds (default: 30000) */
+  retryMaxDelay?: number;
+  /** HTTP status codes to retry on (default: [429, 500, 502, 503, 504]) */
+  retryOnStatus?: number[];
+  /** Whether to retry on network errors (default: true) */
+  retryOnNetworkError?: boolean;
 }
 
 /**
@@ -24,14 +34,16 @@ export interface AIFirewallOptions {
 export interface ValidationResult {
   /** Whether the action is allowed */
   allowed: boolean;
-  /** Unique identifier for this validation */
-  actionId: string;
+  /** Unique identifier for this validation (null for simulations) */
+  actionId: string | null;
   /** When the validation occurred */
   timestamp: Date;
   /** Reason if the action was blocked */
   reason?: string;
   /** Validation execution time in milliseconds */
   executionTimeMs?: number;
+  /** True if this was a simulation (no audit log created) */
+  simulated: boolean;
 }
 
 /**
@@ -147,14 +159,23 @@ export interface GetLogsOptions {
 }
 
 /**
+ * Options for executing an action validation.
+ */
+export interface ExecuteOptions {
+  /** If true, run validation without logging or affecting state (what-if mode) */
+  simulate?: boolean;
+}
+
+/**
  * API response types (internal use)
  */
 export interface ApiValidationResponse {
   allowed: boolean;
-  action_id: string;
+  action_id: string | null;
   timestamp: string;
   reason?: string;
   execution_time_ms?: number;
+  simulated: boolean;
 }
 
 export interface ApiPolicyResponse {

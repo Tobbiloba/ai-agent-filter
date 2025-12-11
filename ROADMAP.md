@@ -61,16 +61,18 @@
 | 2.2 | Node.js SDK | High | Medium | TypeScript/JavaScript support. Same API as Python SDK. ✓ Done |
 | 2.3 | Webhook Notifications | High | Easy | POST to Slack/Discord/custom URL on blocked actions. ✓ Done |
 | 2.4 | Better Error Messages | High | Easy | Actionable guidance in all error responses. ✓ Done |
-| 2.5 | Policy Simulation | High | Medium | "What if" mode - test policies without affecting production. |
-| 2.6 | SDK Retry Logic | Medium | Easy | Exponential backoff on transient failures. |
-| 2.7 | Request Timeout Config | Medium | Easy | Configurable timeouts at server and SDK level. |
+| 2.5 | Policy Simulation | High | Medium | "What if" mode - test policies without affecting production. ✓ Done |
+| 2.6 | SDK Retry Logic | Medium | Easy | Exponential backoff on transient failures. ✓ Done |
+| 2.7 | Request Timeout Config | Medium | Easy | Configurable timeouts at server and SDK level. ✓ Done |
 
 **Week 2 Definition of Done:**
 - [x] 3 policy templates ready to use
 - [x] Node.js SDK implemented with full API parity
 - [x] Webhook fires on blocked actions
 - [x] Better error messages with actionable guidance
-- [ ] Policy simulation returns "would block" results
+- [x] Policy simulation returns "would block" results
+- [x] SDK retry logic with exponential backoff
+- [x] Configurable request timeouts at server and SDK level
 
 ---
 
