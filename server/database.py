@@ -1,5 +1,8 @@
 """Database configuration and session management."""
 
+import re
+import ssl
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
@@ -19,47 +22,53 @@ def _is_pooler_url(url: str) -> bool:
     return "-pooler" in url or "pgbouncer" in url.lower()
 
 
-def _fix_asyncpg_ssl(url: str) -> str:
-    """Fix SSL parameter for asyncpg compatibility.
+def _needs_ssl(url: str) -> bool:
+    """Check if URL requires SSL (has sslmode or ssl parameter)."""
+    return "sslmode=" in url or "ssl=" in url
 
-    asyncpg uses 'ssl' parameter, not 'sslmode' (which is for psycopg2/libpq).
-    For Neon and other cloud PostgreSQL providers, ssl=true works best.
+
+def _strip_ssl_params(url: str) -> str:
+    """Remove sslmode and ssl parameters from URL.
+
+    SQLAlchemy's asyncpg dialect doesn't handle SSL params in the URL.
+    Instead, SSL must be passed via connect_args.
     """
-    if "asyncpg" in url:
-        # Replace sslmode=X with ssl=true (most compatible format for asyncpg)
-        if "sslmode=" in url:
-            # Remove sslmode parameter and add ssl=true
-            import re
-            url = re.sub(r'[?&]sslmode=[^&]*', '', url)
-            # Add ssl=true
-            if "?" in url:
-                url += "&ssl=true"
-            else:
-                url += "?ssl=true"
-        # Also handle if ssl=require was set (convert to ssl=true)
-        elif "ssl=require" in url:
-            url = url.replace("ssl=require", "ssl=true")
+    # Remove sslmode=X
+    url = re.sub(r'[?&]sslmode=[^&]*', '', url)
+    # Remove ssl=X
+    url = re.sub(r'[?&]ssl=[^&]*', '', url)
+    # Clean up dangling ? or &
+    url = re.sub(r'\?&', '?', url)
+    url = re.sub(r'\?$', '', url)
     return url
 
 
 def create_engine_with_config():
     """Create async engine with appropriate config for database type."""
-    # Fix sslmode for asyncpg compatibility
-    database_url = _fix_asyncpg_ssl(settings.database_url)
-    is_sqlite = _is_sqlite(database_url)
+    original_url = settings.database_url
+    is_sqlite = _is_sqlite(original_url)
 
     if is_sqlite:
         # SQLite: No connection pooling, use NullPool for async compatibility
         return create_async_engine(
-            database_url,
+            original_url,
             echo=settings.db_echo or settings.debug,
             future=True,
             poolclass=NullPool,
         )
     else:
-        # PostgreSQL: Full connection pooling
-        # Check if using a connection pooler (Neon, Supabase, etc.)
+        # PostgreSQL: Handle SSL and connection pooling
         connect_args = {}
+
+        # For asyncpg, SSL must be passed via connect_args, not URL
+        if "asyncpg" in original_url and _needs_ssl(original_url):
+            # Strip SSL params from URL and pass via connect_args
+            database_url = _strip_ssl_params(original_url)
+            connect_args["ssl"] = ssl.create_default_context()
+        else:
+            database_url = original_url
+
+        # Check if using a connection pooler (Neon, Supabase, etc.)
         if _is_pooler_url(database_url):
             # Disable prepared statements for PgBouncer compatibility
             connect_args["prepared_statement_cache_size"] = 0
